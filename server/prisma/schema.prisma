@@ -1,5 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
@@ -15,17 +16,96 @@ enum Role {
   EXECUTIVE
 }
 
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  password     String
-  name         String
-  role         Role     @default(CITIZEN)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+enum PropertyType {
+  residential
+  commercial
+}
 
-  refreshTokens RefreshToken[]
+enum SubscriptionStatus {
+  NONE
+  SURVEY_PENDING
+  SURVEY_SUBMITTED
+  PLAN_PROPOSED
+  PAYMENT_PENDING
+  PENDING_INSTALLATION
+  ACTIVE
+}
+
+enum PaymentMethod {
+  UPI
+  Card
+  NetBanking
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum AlertCategory {
+  consumption
+  production
+  battery
+  grid
+  system
+  maintenance
+}
+
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
+enum BillStatus {
+  pending
+  paid
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+}
+
+enum TicketCategory {
+  technical
+  billing
+  installation
+  general
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum ChatRole {
+  user
+  assistant
+}
+
+model User {
+  id                String          @id @default(cuid())
+  email             String          @unique
+  password          String
+  name              String
+  phone             String?
+  address           String?
+  role              Role            @default(CITIZEN)
+  isActive          Boolean         @default(true)
+  currentPropertyId String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  refreshTokens     RefreshToken[]
+  properties        Property[]
+  notifications     Notification[]
+  supportTickets    SupportTicket[]
+  aiMessages        AIMessage[]
 
   @@map("users")
 }
@@ -41,4 +121,217 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+model Property {
+  id                 String               @id @default(cuid())
+  userId             String
+  name               String
+  address            String
+  type               PropertyType
+  subscriptionStatus SubscriptionStatus   @default(NONE)
+  planType           String?
+  solarCapacity      Float?
+  batteryStorage     Float?
+  installationDate   DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  surveys            Survey[]
+  proposals          Proposal[]
+  payments           Payment[]
+  installation       InstallationProgress?
+  energyStats        EnergyStat[]
+  alerts             Alert[]
+  bills              Bill[]
+  supportTickets     SupportTicket[]
+  aiMessages         AIMessage[]
+
+  @@map("properties")
+}
+
+model Survey {
+  id                 String   @id @default(cuid())
+  propertyId         String
+  propertyType       PropertyType
+  roofArea           Float
+  monthlyBill        Float
+  monthlyConsumption Float
+  peakHours          String
+  occupants          Int
+  appliances         String[]
+  status             String   @default("SUBMITTED")
+  submittedAt        DateTime @default(now())
+
+  property           Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("surveys")
+}
+
+model Proposal {
+  id                  String   @id @default(cuid())
+  propertyId          String
+  surveyId            String
+  solarCapacity       Float
+  batteryStorage      Float
+  monthlyFee          Float
+  estimatedSavings    Float
+  estimatedProduction Float
+  contractDuration    Int
+  installationFee     Float
+  securityDeposit     Float
+  whatsIncluded       String[]
+  generatedAt         DateTime @default(now())
+  expiresAt           DateTime
+
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("proposals")
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  propertyId        String
+  proposalId        String?
+  orderId           String        @unique
+  transactionId     String?
+  paymentMethod     PaymentMethod
+  amount            Float
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  signature         String?
+  description       String?
+  paymentGatewayUrl String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+
+  property          Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model InstallationProgress {
+  id                  String   @id @default(cuid())
+  propertyId          String   @unique
+  paymentConfirmed    Boolean  @default(false)
+  paymentConfirmedAt  DateTime?
+  engineerAssigned    Boolean  @default(false)
+  engineerName        String?
+  engineerPhone       String?
+  engineerAssignedAt  DateTime?
+  siteSurveyScheduled Boolean  @default(false)
+  siteSurveyDate      DateTime?
+  installationStarted Boolean  @default(false)
+  installationDate    DateTime?
+  systemActivated     Boolean  @default(false)
+  activationDate      DateTime?
+  estimatedCompletion String?
+  updatedAt           DateTime @updatedAt
+
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("installation_progress")
+}
+
+model EnergyStat {
+  id             String   @id @default(cuid())
+  propertyId     String
+  date           DateTime @default(now())
+  period         String
+  production     Float
+  consumption    Float
+  gridUsage      Float
+  batteryPercent Float?
+  solarKw        Float?
+  gridKw         Float?
+  exporting      Boolean?
+
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("energy_stats")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  message     String
+  route       String?
+  read        Boolean  @default(false)
+  dismissible Boolean  @default(true)
+  persistent  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Alert {
+  id         String        @id @default(cuid())
+  propertyId String
+  category   AlertCategory
+  severity   AlertSeverity
+  title      String
+  message    String
+  read       Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+model Bill {
+  id              String     @id @default(cuid())
+  propertyId      String
+  month           String
+  totalAmount     Float
+  subscriptionFee Float
+  usageCharge     Float
+  taxes           Float
+  status          BillStatus @default(pending)
+  dueDate         DateTime
+  generatedAt     DateTime   @default(now())
+  paidDate        DateTime?
+  pdfUrl          String?
+
+  property        Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("bills")
+}
+
+model SupportTicket {
+  id                String         @id @default(cuid())
+  userId            String
+  propertyId        String
+  category          TicketCategory
+  priority          TicketPriority
+  status            TicketStatus   @default(open)
+  title             String
+  description       String
+  estimatedResponse String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property          Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("support_tickets")
+}
+
+model AIMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  role       ChatRole
+  content    String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("ai_messages")
 }

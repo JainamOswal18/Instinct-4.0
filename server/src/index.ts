@@ -1,11 +1,24 @@
 import 'dotenv/config';
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
+import { WebSocketServer } from 'ws';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
+import surveyRoutes from './routes/survey.routes';
+import subscriptionRoutes from './routes/subscription.routes';
+import paymentRoutes from './routes/payment.routes';
+import installationRoutes from './routes/installation.routes';
+import energyRoutes from './routes/energy.routes';
+import notificationsRoutes from './routes/notifications.routes';
+import alertsRoutes from './routes/alerts.routes';
+import billingRoutes from './routes/billing.routes';
+import supportRoutes from './routes/support.routes';
+import aiRoutes from './routes/ai.routes';
 import swaggerSpec from './config/swagger';
-import prisma from './lib/prisma';
+import { verifyToken } from './utils/jwt';
+import { publishEnergyEvent } from './utils/realtime';
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -42,8 +55,18 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
+app.use(['/auth', '/api/auth'], authRoutes);
+app.use(['/survey', '/api/survey'], surveyRoutes);
+app.use(['/subscription', '/api/subscription'], subscriptionRoutes);
+app.use(['/payment', '/api/payment'], paymentRoutes);
+app.use(['/installation', '/api/installation'], installationRoutes);
+app.use(['/energy', '/api/energy'], energyRoutes);
+app.use(['/notifications', '/api/notifications'], notificationsRoutes);
+app.use(['/alerts', '/api/alerts'], alertsRoutes);
+app.use(['/billing', '/api/billing'], billingRoutes);
+app.use(['/support', '/api/support'], supportRoutes);
+app.use(['/user', '/api/user'], userRoutes);
+app.use(['/ai', '/api/ai'], aiRoutes);
 
 // ── Swagger UI ────────────────────────────────────────────────
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -57,21 +80,91 @@ app.get('/api/docs.json', (_req, res) => {
 
 // 404
 app.use((_req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
+  res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } });
 });
 
 // ── Global error handler ──────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);
-  res.status(500).json({ success: false, message: 'Internal server error' });
+  res.status(500).json({
+    success: false,
+    error: { code: 'INTERNAL_ERROR', message: 'Something went wrong. Please try again later.' },
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────
 async function main() {
-  await prisma.$connect();
-  console.log('✓ Database connected');
+  console.log('✓ Supabase mode active');
 
-  app.listen(PORT, () => {
+  const server = http.createServer(app);
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (req, socket, head) => {
+    const url = req.url || '';
+    if (!url.startsWith('/energy/stream/')) {
+      socket.destroy();
+      return;
+    }
+
+    const [, queryString] = url.split('?');
+    const params = new URLSearchParams(queryString || '');
+    const token = params.get('token');
+    if (!token) {
+      socket.destroy();
+      return;
+    }
+
+    try {
+      verifyToken(token);
+    } catch {
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  });
+
+  wss.on('connection', (ws, req) => {
+    const segments = (req.url || '').split('?')[0].split('/');
+    const propertyId = segments[segments.length - 1] || 'unknown';
+
+    const interval = setInterval(() => {
+      const solarKw = Number((Math.random() * 4 + 2).toFixed(2));
+      const gridKw = Number((Math.random() * 1.2).toFixed(2));
+      const consumption = Number((solarKw + gridKw).toFixed(2));
+      const timestamp = new Date().toISOString();
+      ws.send(
+        JSON.stringify({
+          type: 'ENERGY_UPDATE',
+          data: {
+            propertyId,
+            timestamp,
+            solarKw,
+            batteryPercent: Math.round(Math.random() * 40 + 50),
+            gridKw,
+            consumption,
+          },
+        }),
+      );
+
+      publishEnergyEvent({
+        propertyId,
+        timestamp,
+        solarKw,
+        batteryPercent: Math.round(Math.random() * 40 + 50),
+        gridKw,
+        consumption,
+      }).catch(() => {
+        // no-op for local stream stability
+      });
+    }, 15000);
+
+    ws.on('close', () => clearInterval(interval));
+  });
+
+  server.listen(PORT, () => {
     console.log(`✓ Server running on http://localhost:${PORT}`);
   });
 }

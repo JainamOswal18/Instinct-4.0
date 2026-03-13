@@ -1,130 +1,146 @@
-import { Router, Request, Response } from 'express';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
-import { AuthRequest, Role } from '../types';
-import prisma from '../lib/prisma';
+import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { authenticate } from '../middleware/auth.middleware';
+import { AuthRequest } from '../types';
+import { assertNoDbError, getEaasClient, mapProperty, mapUserProfile, PropertyRow, UserRow } from '../lib/eaas-db';
+import { sendError, sendSuccess } from '../utils/api-response';
+import { asyncHandler } from '../utils/async-handler';
 
 const router = Router();
 
-/**
- * @openapi
- * /api/users:
- *   get:
- *     tags:
- *       - Users
- *     summary: List all users
- *     description: Returns all registered users. Requires ADMIN or EXECUTIVE role.
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of users
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     users:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/User'
- *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       403:
- *         description: Insufficient role (requires ADMIN or EXECUTIVE)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/', authenticate, requireRole(Role.ADMIN, Role.EXECUTIVE), async (_req: Request, res: Response) => {
-  const users = await prisma.user.findMany({
-    select: { id: true, email: true, name: true, role: true, isActive: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ success: true, data: { users } });
+const profileSchema = z.object({
+  name: z.string().min(2).optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
 });
 
-/**
- * @openapi
- * /api/users/{id}/deactivate:
- *   patch:
- *     tags:
- *       - Users
- *     summary: Deactivate a user account
- *     description: Soft-deactivates a user. Admins cannot deactivate their own account. Requires ADMIN role.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The CUID of the user to deactivate
- *         example: cmmm13zlw00004p5yspe7orsv
- *     responses:
- *       200:
- *         description: User deactivated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: User deactivated
- *                 data:
- *                   type: object
- *                   properties:
- *                     user:
- *                       $ref: '#/components/schemas/User'
- *       400:
- *         description: Cannot deactivate own account
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       403:
- *         description: Insufficient role (requires ADMIN)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.patch('/:id/deactivate', authenticate, requireRole(Role.ADMIN), async (req: AuthRequest, res: Response) => {
-  const { id } = req.params as { id: string };
-
-  if (id === req.user?.userId) {
-    res.status(400).json({ success: false, message: 'Cannot deactivate your own account' });
-    return;
-  }
-
-  const user = await prisma.user.update({
-    where: { id },
-    data: { isActive: false },
-    select: { id: true, email: true, name: true, role: true, isActive: true },
-  });
-
-  res.json({ success: true, message: 'User deactivated', data: { user } });
+const propertySchema = z.object({
+  name: z.string().min(1),
+  address: z.string().min(3),
+  type: z.enum(['residential', 'commercial']),
 });
+
+router.get(
+  '/profile',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthRequest;
+    const db = getEaasClient();
+    const { data: user, error } = await db
+      .from('users')
+      .select('id,email,name,phone,address,current_property_id,created_at,password,role,is_active')
+      .eq('id', authReq.user!.userId)
+      .maybeSingle();
+    assertNoDbError(error);
+
+    if (!user) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    sendSuccess(res, mapUserProfile(user as UserRow));
+  }),
+);
+
+router.patch(
+  '/profile',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const parsed = profileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid request parameters', parsed.error.flatten().fieldErrors);
+      return;
+    }
+
+    const authReq = req as AuthRequest;
+    const db = getEaasClient();
+    const updatePayload: { name?: string; phone?: string; address?: string } = {};
+    if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+    if (parsed.data.phone !== undefined) updatePayload.phone = parsed.data.phone;
+    if (parsed.data.address !== undefined) updatePayload.address = parsed.data.address;
+
+    const { data: user, error } = await db
+      .from('users')
+      .update(updatePayload)
+      .eq('id', authReq.user!.userId)
+      .select('id,email,name,phone,address,current_property_id,created_at,password,role,is_active')
+      .maybeSingle();
+    assertNoDbError(error);
+
+    if (!user) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    sendSuccess(res, mapUserProfile(user as UserRow), 'Profile updated successfully');
+  }),
+);
+
+router.get(
+  '/properties',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthRequest;
+    const db = getEaasClient();
+    const { data: properties, error } = await db
+      .from('properties')
+      .select('id,user_id,name,address,type,subscription_status,plan_type,solar_capacity,battery_storage,installation_date,created_at')
+      .eq('user_id', authReq.user!.userId)
+      .order('created_at', { ascending: false });
+    assertNoDbError(error);
+
+    sendSuccess(res, { properties: (properties || []).map((property) => mapProperty(property as PropertyRow)) });
+  }),
+);
+
+router.post(
+  '/properties',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const parsed = propertySchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid request parameters', parsed.error.flatten().fieldErrors);
+      return;
+    }
+
+    const authReq = req as AuthRequest;
+    const db = getEaasClient();
+    const { data: property, error: propertyError } = await db
+      .from('properties')
+      .insert({
+        id: randomUUID(),
+        user_id: authReq.user!.userId,
+        name: parsed.data.name,
+        address: parsed.data.address,
+        type: parsed.data.type,
+      })
+      .select('id,user_id,name,address,type,subscription_status,plan_type,solar_capacity,battery_storage,installation_date,created_at')
+      .single();
+    assertNoDbError(propertyError);
+
+    const { error: userUpdateError } = await db
+      .from('users')
+      .update({ current_property_id: (property as PropertyRow).id })
+      .eq('id', authReq.user!.userId);
+    assertNoDbError(userUpdateError);
+
+    const mappedProperty = mapProperty(property as PropertyRow);
+
+    sendSuccess(
+      res,
+      {
+        propertyId: mappedProperty.id,
+        name: mappedProperty.name,
+        address: mappedProperty.address,
+        type: mappedProperty.type,
+        subscriptionStatus: mappedProperty.subscriptionStatus,
+        createdAt: mappedProperty.createdAt,
+      },
+      undefined,
+      201,
+    );
+  }),
+);
 
 export default router;

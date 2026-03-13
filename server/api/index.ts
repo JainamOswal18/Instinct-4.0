@@ -3,6 +3,16 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from '../src/routes/auth.routes';
 import userRoutes from '../src/routes/user.routes';
+import surveyRoutes from '../src/routes/survey.routes';
+import subscriptionRoutes from '../src/routes/subscription.routes';
+import paymentRoutes from '../src/routes/payment.routes';
+import installationRoutes from '../src/routes/installation.routes';
+import energyRoutes from '../src/routes/energy.routes';
+import notificationsRoutes from '../src/routes/notifications.routes';
+import alertsRoutes from '../src/routes/alerts.routes';
+import billingRoutes from '../src/routes/billing.routes';
+import supportRoutes from '../src/routes/support.routes';
+import aiRoutes from '../src/routes/ai.routes';
 import swaggerSpec from '../src/config/swagger';
 
 const CDN = 'https://unpkg.com/swagger-ui-dist@5.32.0';
@@ -48,8 +58,18 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
+app.use(['/auth', '/api/auth'], authRoutes);
+app.use(['/survey', '/api/survey'], surveyRoutes);
+app.use(['/subscription', '/api/subscription'], subscriptionRoutes);
+app.use(['/payment', '/api/payment'], paymentRoutes);
+app.use(['/installation', '/api/installation'], installationRoutes);
+app.use(['/energy', '/api/energy'], energyRoutes);
+app.use(['/notifications', '/api/notifications'], notificationsRoutes);
+app.use(['/alerts', '/api/alerts'], alertsRoutes);
+app.use(['/billing', '/api/billing'], billingRoutes);
+app.use(['/support', '/api/support'], supportRoutes);
+app.use(['/user', '/api/user'], userRoutes);
+app.use(['/ai', '/api/ai'], aiRoutes);
 
 // ── Swagger UI (CDN-backed, works in serverless) ──────────────
 app.get('/api/docs', (_req, res) => {
@@ -67,13 +87,16 @@ app.get('/api/docs.json', (_req, res) => {
 
 // ── 404 ───────────────────────────────────────────────────────
 app.use((_req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
+  res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } });
 });
 
 // ── Global error handler ──────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);
-  res.status(500).json({ success: false, message: 'Internal server error' });
+  res.status(500).json({
+    success: false,
+    error: { code: 'INTERNAL_ERROR', message: 'Something went wrong. Please try again later.' },
+  });
 });
 
 export default app;

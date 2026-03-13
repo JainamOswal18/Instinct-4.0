@@ -1,0 +1,383 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EaaS Nexus Backend API",
+    "version": "1.0.0",
+    "description": "Backend API contract for EaaS Nexus mobile application."
+  },
+  "servers": [
+    { "url": "https://server-plum-six.vercel.app", "description": "Production" },
+    { "url": "http://localhost:3001", "description": "Development" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "VALIDATION_ERROR" },
+              "message": { "type": "string", "example": "Invalid request parameters" },
+              "details": { "type": "object", "additionalProperties": true }
+            },
+            "required": ["code", "message"]
+          }
+        },
+        "required": ["success", "error"]
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string" },
+          "data": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["success"]
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Survey" },
+    { "name": "Subscription" },
+    { "name": "Payment" },
+    { "name": "Installation" },
+    { "name": "Energy" },
+    { "name": "Notifications" },
+    { "name": "Alerts" },
+    { "name": "Billing" },
+    { "name": "Support" },
+    { "name": "User" },
+    { "name": "AI" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "security": [],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "example": { "status": "ok", "timestamp": "2026-03-13T10:00:00Z" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "User login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": { "email": "user@example.com", "password": "password123" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "User registration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": { "name": "Rahul Kumar", "email": "user@example.com", "password": "password123", "phone": "+91 98765 43210" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "responses": {
+          "200": { "description": "Logged out", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user",
+        "responses": {
+          "200": { "description": "Current user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/survey/submit": {
+      "post": {
+        "tags": ["Survey"],
+        "summary": "Submit energy survey",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "propertyType": "residential", "roofArea": 100, "monthlyBill": 5000, "monthlyConsumption": 350, "peakHours": "6-9 PM", "occupants": 4, "appliances": ["Air Conditioner", "Water Heater"] } } }
+        },
+        "responses": { "200": { "description": "Survey submitted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/subscription/generate-proposal": {
+      "post": {
+        "tags": ["Subscription"],
+        "summary": "Generate proposal",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "surveyId": "survey_001" } } }
+        },
+        "responses": { "200": { "description": "Proposal generated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/subscription/proposal/{proposalId}": {
+      "get": {
+        "tags": ["Subscription"],
+        "summary": "Get proposal details",
+        "parameters": [{ "in": "path", "name": "proposalId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Proposal details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/payment/initiate": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "Initiate payment",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "proposalId": "proposal_001", "paymentMethod": "UPI", "amount": 8500, "currency": "INR" } } }
+        },
+        "responses": { "200": { "description": "Payment initiated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/payment/verify": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "Verify payment",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "paymentId": "pay_001", "orderId": "order_001", "signature": "razorpay_signature_here" } } }
+        },
+        "responses": { "200": { "description": "Payment verified", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/payment/history": {
+      "get": {
+        "tags": ["Payment"],
+        "summary": "Get payment history",
+        "parameters": [{ "in": "query", "name": "propertyId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Payment history", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/installation/progress/{propertyId}": {
+      "get": {
+        "tags": ["Installation"],
+        "summary": "Get installation progress",
+        "parameters": [{ "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Progress details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/installation/update": {
+      "patch": {
+        "tags": ["Installation"],
+        "summary": "Update installation step",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "step": "siteSurveyScheduled", "data": { "siteSurveyDate": "2024-03-16T10:00:00Z" } } } }
+        },
+        "responses": { "200": { "description": "Installation updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/energy/realtime/{propertyId}": {
+      "get": {
+        "tags": ["Energy"],
+        "summary": "Get realtime energy data",
+        "parameters": [{ "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Realtime energy", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/energy/stats/{propertyId}": {
+      "get": {
+        "tags": ["Energy"],
+        "summary": "Get energy statistics",
+        "parameters": [
+          { "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "period", "schema": { "type": "string", "enum": ["day", "week", "month", "year"] } },
+          { "in": "query", "name": "startDate", "schema": { "type": "string", "format": "date-time" } },
+          { "in": "query", "name": "endDate", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "Energy stats", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/energy/stream/{propertyId}": {
+      "get": {
+        "tags": ["Energy"],
+        "summary": "Get Supabase realtime subscription config",
+        "description": "Returns channel/table/filter info for client-side Supabase realtime subscription.",
+        "parameters": [
+          { "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Realtime subscription config", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get user notifications",
+        "parameters": [
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 50 } },
+          { "in": "query", "name": "offset", "schema": { "type": "integer", "default": 0 } },
+          { "in": "query", "name": "unreadOnly", "schema": { "type": "boolean", "default": false } }
+        ],
+        "responses": { "200": { "description": "Notifications", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark notification as read",
+        "parameters": [{ "in": "path", "name": "notificationId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Marked read", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/notifications/read-all": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark all notifications as read",
+        "responses": { "200": { "description": "All read", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/alerts/{propertyId}": {
+      "get": {
+        "tags": ["Alerts"],
+        "summary": "Get property alerts",
+        "parameters": [{ "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Alerts", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/billing/current/{propertyId}": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get current bill",
+        "parameters": [{ "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Current bill", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/billing/history/{propertyId}": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Get billing history",
+        "parameters": [
+          { "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 12 } },
+          { "in": "query", "name": "offset", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": { "200": { "description": "Billing history", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/billing/download/{billId}": {
+      "get": {
+        "tags": ["Billing"],
+        "summary": "Download bill PDF",
+        "parameters": [{ "in": "path", "name": "billId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "PDF file", "content": { "application/pdf": {} } } }
+      }
+    },
+    "/support/ticket": {
+      "post": {
+        "tags": ["Support"],
+        "summary": "Create support ticket",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "category": "technical", "priority": "high", "title": "Solar panel issue", "description": "My solar panel stopped generating power." } } }
+        },
+        "responses": { "201": { "description": "Ticket created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/support/tickets": {
+      "get": {
+        "tags": ["Support"],
+        "summary": "Get user tickets",
+        "responses": { "200": { "description": "Tickets", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/user/profile": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get user profile",
+        "responses": { "200": { "description": "Profile", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      },
+      "patch": {
+        "tags": ["User"],
+        "summary": "Update user profile",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "name": "Rahul Kumar", "phone": "+91 98765 43210", "address": "456 New Address, Mumbai" } } }
+        },
+        "responses": { "200": { "description": "Profile updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/user/properties": {
+      "get": {
+        "tags": ["User"],
+        "summary": "Get user properties",
+        "responses": { "200": { "description": "Properties", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      },
+      "post": {
+        "tags": ["User"],
+        "summary": "Add new property",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "name": "Office", "address": "456 Business Park, Mumbai", "type": "commercial" } } }
+        },
+        "responses": { "201": { "description": "Property added", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/ai/chat": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Send message to AI advisor",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "message": "How can I reduce my electricity bill?" } } }
+        },
+        "responses": { "200": { "description": "AI response", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    },
+    "/ai/chat/{propertyId}/history": {
+      "get": {
+        "tags": ["AI"],
+        "summary": "Get AI chat history",
+        "parameters": [{ "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Chat history", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
+      }
+    }
+  }
+}

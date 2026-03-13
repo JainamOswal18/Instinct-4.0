@@ -1,6 +1,6 @@
 # Instinct 4.0 — Server
 
-Node.js + TypeScript REST API backend for Instinct 4.0 with role-based authentication (JWT), Prisma ORM, and PostgreSQL.
+Node.js + TypeScript REST API backend for Instinct 4.0 with role-based authentication (JWT), Supabase, and PostgreSQL.
 
 ---
 
@@ -11,8 +11,8 @@ Node.js + TypeScript REST API backend for Instinct 4.0 with role-based authentic
 | Runtime | Node.js 20+ |
 | Language | TypeScript 5 |
 | Framework | Express 4 |
-| ORM | Prisma 5 |
-| Database | PostgreSQL (Prisma Accelerate) |
+| Data Access | Supabase JS |
+| Database | PostgreSQL (Supabase) |
 | Auth | JWT (jsonwebtoken) + bcrypt |
 | Validation | Zod |
 | Docs | Swagger UI (OpenAPI 3.0) |
@@ -23,16 +23,14 @@ Node.js + TypeScript REST API backend for Instinct 4.0 with role-based authentic
 
 ```
 server/
-├── prisma/
-│   ├── schema.prisma          # Data models & enum definitions
-│   └── migrations/            # Auto-generated SQL migrations
 ├── src/
 │   ├── config/
 │   │   └── swagger.ts         # OpenAPI spec configuration
 │   ├── controllers/
 │   │   └── auth.controller.ts # register / login / me handlers
 │   ├── lib/
-│   │   └── prisma.ts          # Singleton PrismaClient
+│   │   ├── supabase.ts        # Singleton Supabase client
+│   │   └── eaas-db.ts         # EaaS schema access + row mappers
 │   ├── middleware/
 │   │   └── auth.middleware.ts # JWT authenticate + requireRole guard
 │   ├── routes/
@@ -76,13 +74,7 @@ cp .env.example .env
 | `JWT_EXPIRES_IN` | Token expiry duration | `7d` |
 | `BCRYPT_ROUNDS` | bcrypt cost factor | `12` |
 
-### 3. Run database migrations
-
-```bash
-bun run db:migrate
-```
-
-### 4. Start the dev server
+### 3. Start the dev server
 
 ```bash
 bun run dev
@@ -193,7 +185,4 @@ http://localhost:3001/api/docs.json
 | `bun run dev` | Start dev server with hot-reload |
 | `bun run build` | Compile TypeScript to `dist/` |
 | `bun run start` | Run compiled production build |
-| `bun run db:generate` | Regenerate Prisma client |
-| `bun run db:migrate` | Run pending migrations (dev) |
-| `bun run db:migrate:deploy` | Apply migrations (production) |
-| `bun run db:studio` | Open Prisma Studio |
+| `bun run db:types` | Note for Supabase type generation workflow |

@@ -12,6 +12,7 @@ export interface AuthPayload {
   userId: string;
   email: string;
   role: Role;
+  name?: string;
 }
 
 export interface AuthRequest extends Request {
@@ -19,9 +20,10 @@ export interface AuthRequest extends Request {
 }
 
 export interface RegisterBody {
+  name: string;
   email: string;
   password: string;
-  name: string;
+  phone?: string;
   role?: Role;
 }
 
