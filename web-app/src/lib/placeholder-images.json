@@ -1,0 +1,46 @@
+{
+  "placeholderImages": [
+    {
+      "id": "user-avatar-1",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1695470667338-e7e8608ff048?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxwZXJzb24lMjBmYWNlfGVufDB8fHx8MTc2MjE4ODQxNnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person face"
+    },
+    {
+      "id": "solar-energy",
+      "description": "Solar panels on a roof",
+      "imageUrl": "https://picsum.photos/seed/solar/600/400",
+      "imageHint": "solar panels"
+    },
+    {
+      "id": "battery-backup",
+      "description": "Home battery storage system",
+      "imageUrl": "https://picsum.photos/seed/battery/600/400",
+      "imageHint": "battery storage"
+    },
+    {
+      "id": "lighting-service",
+      "description": "Modern smart lighting in a home",
+      "imageUrl": "https://picsum.photos/seed/lighting/600/400",
+      "imageHint": "smart lighting"
+    },
+    {
+      "id": "cooling-service",
+      "description": "Energy efficient air conditioning unit",
+      "imageUrl": "https://picsum.photos/seed/cooling/600/400",
+      "imageHint": "air conditioning"
+    },
+    {
+      "id": "ev-charging",
+      "description": "Electric vehicle charging station",
+      "imageUrl": "https://picsum.photos/seed/ev/600/400",
+      "imageHint": "ev charging"
+    },
+    {
+      "id": "water-heating",
+      "description": "Smart water heater system",
+      "imageUrl": "https://picsum.photos/seed/water/600/400",
+      "imageHint": "water heater"
+    }
+  ]
+}
