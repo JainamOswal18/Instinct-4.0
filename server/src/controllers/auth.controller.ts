@@ -30,6 +30,13 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 
   const { email, password, name, role, phone } = parsed.data;
+  const allowElevatedSignup = (process.env.ALLOW_ELEVATED_SIGNUP || 'true').toLowerCase() === 'true';
+
+  if (!allowElevatedSignup && role !== Role.CITIZEN) {
+    sendError(res, 403, 'FORBIDDEN', 'Elevated role signup is disabled');
+    return;
+  }
+
   const db = getEaasClient();
 
   const { data: existing, error: existingError } = await db

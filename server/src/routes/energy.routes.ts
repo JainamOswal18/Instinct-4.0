@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { APP_DB_SCHEMA, assertNoDbError, getEaasClient } from '../lib/eaas-db';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { Role } from '../types';
 import { asyncHandler } from '../utils/async-handler';
 import { sendError, sendSuccess } from '../utils/api-response';
 import { publishEnergyEvent } from '../utils/realtime';
@@ -139,6 +140,51 @@ router.get(
       supabaseUrl,
       supabaseAnonKey,
       channel: `energy:${propertyId}`,
+    });
+  }),
+);
+
+router.get(
+  '/admin/analytics/overview',
+  authenticate,
+  requireRole(Role.ADMIN, Role.EXECUTIVE),
+  asyncHandler(async (_req, res) => {
+    const db = getEaasClient();
+    const [usersResult, propertiesResult, billsResult, energyResult, ticketsResult] = await Promise.all([
+      db.from('users').select('*', { count: 'exact', head: true }),
+      db.from('properties').select('*', { count: 'exact', head: true }),
+      db.from('bills').select('total_amount,status,generated_at').order('generated_at', { ascending: false }).limit(200),
+      db.from('energy_stats').select('production,consumption,date').order('date', { ascending: false }).limit(500),
+      db.from('support_tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
+    ]);
+
+    assertNoDbError(usersResult.error);
+    assertNoDbError(propertiesResult.error);
+    assertNoDbError(billsResult.error);
+    assertNoDbError(energyResult.error);
+    assertNoDbError(ticketsResult.error);
+
+    const totalUsers = usersResult.count || 0;
+    const totalProperties = propertiesResult.count || 0;
+    const openTickets = ticketsResult.count || 0;
+    const bills = billsResult.data || [];
+    const totalRevenue = bills
+      .filter((bill: any) => bill.status === 'paid')
+      .reduce((sum: number, bill: any) => sum + Number(bill.total_amount || 0), 0);
+
+    const energyRows = energyResult.data || [];
+    const totalProduction = energyRows.reduce((sum: number, row: any) => sum + Number(row.production || 0), 0);
+    const totalConsumption = energyRows.reduce((sum: number, row: any) => sum + Number(row.consumption || 0), 0);
+    const netOffsetPercent = totalConsumption > 0 ? Number(((totalProduction / totalConsumption) * 100).toFixed(2)) : 0;
+
+    sendSuccess(res, {
+      totalUsers,
+      totalProperties,
+      openTickets,
+      totalRevenue: Number(totalRevenue.toFixed(2)),
+      totalProduction: Number(totalProduction.toFixed(2)),
+      totalConsumption: Number(totalConsumption.toFixed(2)),
+      netOffsetPercent,
     });
   }),
 );

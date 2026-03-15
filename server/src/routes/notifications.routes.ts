@@ -1,11 +1,22 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
 import { assertNoDbError, getEaasClient } from '../lib/eaas-db';
-import { authenticate } from '../middleware/auth.middleware';
-import { AuthRequest } from '../types';
+import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { AuthRequest, Role } from '../types';
 import { asyncHandler } from '../utils/async-handler';
+import { logAdminAction } from '../utils/audit';
 import { sendSuccess } from '../utils/api-response';
 
 const router = Router();
+
+const adminBroadcastSchema = z.object({
+  title: z.string().min(3),
+  message: z.string().min(3),
+  route: z.string().optional(),
+  type: z.string().optional().default('announcement'),
+  userIds: z.array(z.string().min(1)).optional(),
+});
 
 router.get(
   '/',
@@ -91,6 +102,61 @@ router.patch(
     const { error } = await db.from('notifications').update({ read: true }).eq('user_id', authReq.user!.userId);
     assertNoDbError(error);
     sendSuccess(res, undefined, 'All notifications marked as read');
+  }),
+);
+
+router.post(
+  '/admin/broadcast',
+  authenticate,
+  requireRole(Role.ADMIN),
+  asyncHandler(async (req, res) => {
+    const parsed = adminBroadcastSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request parameters',
+          details: parsed.error.flatten().fieldErrors,
+        },
+      });
+      return;
+    }
+
+    const authReq = req as AuthRequest;
+    const db = getEaasClient();
+
+    const recipients = parsed.data.userIds && parsed.data.userIds.length > 0
+      ? parsed.data.userIds
+      : (await db.from('users').select('id')).data?.map((user: any) => user.id) || [];
+
+    const payload = recipients.map((userId) => ({
+      id: randomUUID(),
+      user_id: userId,
+      type: parsed.data.type,
+      title: parsed.data.title,
+      message: parsed.data.message,
+      route: parsed.data.route || null,
+      read: false,
+      dismissible: true,
+      persistent: false,
+    }));
+
+    if (payload.length > 0) {
+      const { error } = await db.from('notifications').insert(payload);
+      assertNoDbError(error);
+    }
+
+    await logAdminAction(authReq, {
+      action: 'notification.broadcast',
+      entityType: 'notification',
+      metadata: {
+        title: parsed.data.title,
+        recipientCount: payload.length,
+      },
+    });
+
+    sendSuccess(res, { recipientCount: payload.length }, 'Broadcast sent successfully');
   }),
 );
 

@@ -335,3 +335,4 @@ model AIMessage {
 
   @@map("ai_messages")
 }
+

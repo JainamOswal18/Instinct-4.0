@@ -16,7 +16,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { loginUser, registerUser, isAuthenticated } from '@/lib/auth';
+import { loginUser, registerUser, isAuthenticated, type AppRole } from '@/lib/auth';
 import { Mail, Lock, User, Phone, ArrowRight, Sparkles } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup';
@@ -61,7 +61,7 @@ export default function AuthPage() {
     // Simulate a small delay for UX
     await new Promise(resolve => setTimeout(resolve, 600));
 
-    const result = loginUser(loginEmail, loginPassword);
+    const result = await loginUser(loginEmail, loginPassword);
 
     if (result.success) {
       toast({
@@ -124,10 +124,10 @@ export default function AuthPage() {
 
     await new Promise(resolve => setTimeout(resolve, 600));
 
-    const result = registerUser({
+    const result = await registerUser({
       name: signupName,
       email: signupEmail,
-      role: signupRole as 'user' | 'provider' | 'admin',
+      role: signupRole as AppRole,
       phone: signupPhone,
       password: signupPassword,
     });
@@ -317,9 +317,9 @@ export default function AuthPage() {
                         <SelectValue placeholder="Select your role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="provider">Energy Provider</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="CITIZEN">Citizen</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                        <SelectItem value="EXECUTIVE">Executive</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

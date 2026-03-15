@@ -16,6 +16,7 @@ import alertsRoutes from './routes/alerts.routes';
 import billingRoutes from './routes/billing.routes';
 import supportRoutes from './routes/support.routes';
 import aiRoutes from './routes/ai.routes';
+import maintenanceRoutes from './routes/maintenance.routes';
 import swaggerSpec from './config/swagger';
 import { verifyToken } from './utils/jwt';
 import { publishEnergyEvent } from './utils/realtime';
@@ -67,6 +68,7 @@ app.use(['/billing', '/api/billing'], billingRoutes);
 app.use(['/support', '/api/support'], supportRoutes);
 app.use(['/user', '/api/user'], userRoutes);
 app.use(['/ai', '/api/ai'], aiRoutes);
+app.use(['/maintenance', '/api/maintenance'], maintenanceRoutes);
 
 // ── Swagger UI ────────────────────────────────────────────────
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

@@ -26,6 +26,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import StatsCards from '@/components/dashboard/stats-cards';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { getSession } from '@/lib/auth';
+import { fetchAdminOverview } from '@/lib/admin-api';
 import {
   Dialog,
   DialogContent,
@@ -494,9 +496,52 @@ function ProviderDashboard() {
 // ADMIN DASHBOARD
 // ========================================
 function AdminDashboard() {
+  const [overview, setOverview] = useState<{
+    totalUsers: number;
+    totalProperties: number;
+    openTickets: number;
+    totalRevenue: number;
+  } | null>(null);
+
+  useEffect(() => {
+    fetchAdminOverview()
+      .then((data) => {
+        setOverview({
+          totalUsers: data.totalUsers,
+          totalProperties: data.totalProperties,
+          openTickets: data.openTickets,
+          totalRevenue: data.totalRevenue,
+        });
+      })
+      .catch(() => {
+        setOverview(null);
+      });
+  }, []);
+
   return (
     <div className="space-y-6">
-      <StatsCards />
+      {overview ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Total Users</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{overview.totalUsers}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Total Properties</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{overview.totalProperties}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Open Tickets</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{overview.openTickets}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Revenue</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">₹{overview.totalRevenue.toFixed(2)}</div></CardContent>
+          </Card>
+        </div>
+      ) : (
+        <StatsCards />
+      )}
       <Card>
         <CardHeader>
           <CardTitle>System Overview</CardTitle>
@@ -517,19 +562,18 @@ export default function DashboardPage() {
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedRole = localStorage.getItem('userRole');
-    if (storedRole) {
-      setRole(storedRole);
+    const session = getSession();
+    if (session?.role) {
+      setRole(session.role);
     }
   }, []);
 
   const renderDashboard = () => {
     switch (role) {
-      case 'user':
+      case 'CITIZEN':
         return <UserDashboard />;
-      case 'provider':
-        return <ProviderDashboard />;
-      case 'admin':
+      case 'ADMIN':
+      case 'EXECUTIVE':
         return <AdminDashboard />;
       default:
         return <p className="p-8 text-center text-muted-foreground">Authenticating session...</p>;
@@ -537,9 +581,9 @@ export default function DashboardPage() {
   };
   
   const roleDisplayNames: { [key: string]: string } = {
-    user: 'Your Energy Portal',
-    provider: 'Provider Control Hub',
-    admin: 'EaaS Nexus Command',
+    CITIZEN: 'Your Energy Portal',
+    ADMIN: 'EaaS Nexus Command',
+    EXECUTIVE: 'Executive Command View',
   };
 
   const title = role ? roleDisplayNames[role] : "Welcome";

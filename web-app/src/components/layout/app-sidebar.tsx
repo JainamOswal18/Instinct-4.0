@@ -47,20 +47,18 @@ function SidebarContent() {
     setIsClient(true);
     const currentSession = getSession();
     setSession(currentSession);
-    const storedRole = currentSession?.role || localStorage.getItem('userRole');
-    if (storedRole === 'user') {
+    const storedRole = currentSession?.role;
+    if (storedRole === 'CITIZEN') {
       setNavLinks(userNavLinks);
-    } else if (storedRole === 'provider') {
-      setNavLinks(providerNavLinks);
-    } else if (storedRole === 'admin') {
+    } else if (storedRole === 'ADMIN' || storedRole === 'EXECUTIVE') {
       setNavLinks(adminNavLinks);
     } else {
         setNavLinks(userNavLinks); // Default to user if no role
     }
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push('/');
   };
 
