@@ -113,7 +113,7 @@ export function dismissProviderNotification(id: string): void {
 export type UserNotification = {
   id: string;
   message: string;
-  type: 'survey-complete' | 'info';
+  type: 'survey-complete' | 'billing-ready' | 'info';
   dismissed: boolean;
   createdAt: string;
 };
@@ -146,7 +146,6 @@ export function dismissUserNotification(id: string): void {
 }
 
 // --- Survey Results (Provider -> User Billing) ---
-// Now stores raw data only — Gemini generates the billing plan at render time
 
 export function completeSurvey(request: ServiceRequest): SurveyResult {
   const result: SurveyResult = {
@@ -173,4 +172,104 @@ export function getSurveyResults(): SurveyResult[] {
   } catch {
     return [];
   }
+}
+
+// --- Billing Drafts (Provider-reviewed billing workflow) ---
+
+export type BillingPlan = {
+  planName: string;
+  summary: string;
+  installationCost: number;
+  monthlyServiceCharge: number;
+  maintenanceFee: number;
+  totalMonthly: number;
+  estimatedMonthlySavings: number;
+  paybackPeriodMonths: number;
+  features: string[];
+  specifications: {
+    systemCapacity: string;
+    expectedGeneration: string;
+    warrantyPeriod: string;
+    equipmentDetails: string;
+  };
+  rationale: string;
+  // Provider can add custom line items
+  customCharges?: { label: string; amount: number; recurring: boolean }[];
+};
+
+export type BillingDraftStatus = 'draft' | 'provider-approved' | 'user-accepted' | 'user-disputed';
+
+export type BillingDraft = {
+  id: string;
+  requestId: string;
+  serviceTitle: string;
+  consumption: string;
+  areaDescription: string;
+  fileNames: string[];
+  customerName: string;
+  generatedPlan: BillingPlan;
+  status: BillingDraftStatus;
+  createdAt: string;
+  approvedAt?: string;
+  userRespondedAt?: string;
+  disputeReason?: string;
+};
+
+const BILLING_DRAFTS_KEY = 'eaas_billing_drafts';
+
+export function saveBillingDraft(draft: Omit<BillingDraft, 'id' | 'createdAt' | 'status'>): BillingDraft {
+  const newDraft: BillingDraft = {
+    ...draft,
+    id: `bill-${Date.now()}`,
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+  };
+  const existing = getBillingDrafts();
+  existing.push(newDraft);
+  localStorage.setItem(BILLING_DRAFTS_KEY, JSON.stringify(existing));
+  return newDraft;
+}
+
+export function getBillingDrafts(): BillingDraft[] {
+  try {
+    const data = localStorage.getItem(BILLING_DRAFTS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function updateBillingDraft(id: string, updates: Partial<BillingDraft>): void {
+  const drafts = getBillingDrafts();
+  const updated = drafts.map(d => d.id === id ? { ...d, ...updates } : d);
+  localStorage.setItem(BILLING_DRAFTS_KEY, JSON.stringify(updated));
+}
+
+export function approveBillingDraft(id: string, finalPlan: BillingPlan): void {
+  const drafts = getBillingDrafts();
+  const updated = drafts.map(d =>
+    d.id === id
+      ? { ...d, generatedPlan: finalPlan, status: 'provider-approved' as const, approvedAt: new Date().toISOString() }
+      : d
+  );
+  localStorage.setItem(BILLING_DRAFTS_KEY, JSON.stringify(updated));
+}
+
+export function getUserApprovedBills(): BillingDraft[] {
+  return getBillingDrafts().filter(d => d.status === 'provider-approved' || d.status === 'user-accepted' || d.status === 'user-disputed');
+}
+
+export function respondToBill(id: string, accepted: boolean, disputeReason?: string): void {
+  const drafts = getBillingDrafts();
+  const updated = drafts.map(d =>
+    d.id === id
+      ? {
+          ...d,
+          status: (accepted ? 'user-accepted' : 'user-disputed') as BillingDraftStatus,
+          userRespondedAt: new Date().toISOString(),
+          disputeReason: disputeReason || undefined,
+        }
+      : d
+  );
+  localStorage.setItem(BILLING_DRAFTS_KEY, JSON.stringify(updated));
 }

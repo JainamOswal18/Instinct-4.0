@@ -7,7 +7,14 @@ import {
   LifeBuoy,
   Zap,
   ClipboardList,
-  ShieldCheck
+  ShieldCheck,
+  Wrench,
+  Users,
+  Cpu,
+  Ticket,
+  Bell,
+  Activity,
+  CalendarClock,
 } from 'lucide-react';
 
 export type NavLink = {
@@ -19,13 +26,21 @@ export type NavLink = {
 
 export const userNavLinks: NavLink[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/monitor', label: 'Monitor', icon: Activity },
+  { href: '/maintenance', label: 'Maintenance', icon: CalendarClock },
   { href: '/billing', label: 'Billing', icon: FileText },
   { href: '/carbon-footprint', label: 'Carbon Footprint', icon: HeartHandshake },
   { href: '/support', label: 'Support', icon: LifeBuoy },
 ];
 
 export const providerNavLinks: NavLink[] = [
-  { href: '/dashboard', label: 'Surveys', icon: ClipboardList },
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { href: '/installations', label: 'Installations', icon: Wrench },
+  { href: '/provider-billing', label: 'Billing Review', icon: FileText },
+  { href: '/customers', label: 'Customers', icon: Users },
+  { href: '/equipment', label: 'Equipment', icon: Cpu },
+  { href: '/provider-tickets', label: 'Tickets', icon: Ticket },
+  { href: '/provider-alerts', label: 'Alerts', icon: Bell },
   { href: '/grid-status', label: 'Grid Status', icon: Zap },
   { href: '/support', label: 'Support', icon: LifeBuoy },
 ];
