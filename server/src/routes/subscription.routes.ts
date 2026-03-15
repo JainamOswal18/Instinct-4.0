@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { assertNoDbError, getEaasClient } from '../lib/eaas-db';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
@@ -56,44 +55,43 @@ router.post(
     const estimatedSavings = Math.round(survey.monthly_bill * 0.35);
     const estimatedProduction = Math.round(solarCapacity * 120);
 
-    const { data: proposal, error: proposalError } = await db
-      .from('proposals')
-      .insert({
-        id: randomUUID(),
-        property_id: parsed.data.propertyId,
-        survey_id: parsed.data.surveyId,
-        solar_capacity: solarCapacity,
-        battery_storage: batteryStorage,
-        monthly_fee: monthlyFee,
-        estimated_savings: estimatedSavings,
-        estimated_production: estimatedProduction,
-        contract_duration: 24,
-        installation_fee: 0,
-        security_deposit: 5000,
-        whats_included: [
-          `${solarCapacity} kW Solar Panel System`,
-          `${batteryStorage} kWh Battery Storage`,
-          'Smart Energy Monitoring Dashboard',
-          'Grid Integration & Net Metering',
-          'Professional Installation',
-          '24-month Maintenance & Support',
-          'Performance Guarantee',
-          'Mobile App Access',
-        ],
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select('*')
-      .single();
-    assertNoDbError(proposalError);
+    const whatsIncluded = [
+      `${solarCapacity} kW Solar Panel System`,
+      `${batteryStorage} kWh Battery Storage`,
+      'Smart Energy Monitoring Dashboard',
+      'Grid Integration & Net Metering',
+      'Professional Installation',
+      '24-month Maintenance & Support',
+      'Performance Guarantee',
+      'Mobile App Access',
+    ];
 
-    const { error: propertyError } = await db
-      .from('properties')
-      .update({ subscription_status: 'PLAN_PROPOSED' })
-      .eq('id', parsed.data.propertyId);
-    assertNoDbError(propertyError);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: rpcResult, error: rpcError } = await db.rpc('generate_proposal_and_update_property', {
+      p_property_id: parsed.data.propertyId,
+      p_survey_id: parsed.data.surveyId,
+      p_solar_capacity: solarCapacity,
+      p_battery_storage: batteryStorage,
+      p_monthly_fee: monthlyFee,
+      p_estimated_savings: estimatedSavings,
+      p_estimated_production: estimatedProduction,
+      p_contract_duration: 24,
+      p_installation_fee: 0,
+      p_security_deposit: 5000,
+      p_whats_included: whatsIncluded,
+      p_expires_at: expiresAt,
+    });
+    assertNoDbError(rpcError);
+
+    const proposal = Array.isArray(rpcResult) ? rpcResult[0] : null;
+    if (!proposal) {
+      sendError(res, 500, 'INTERNAL_ERROR', 'Failed to generate proposal');
+      return;
+    }
 
     sendSuccess(res, {
-      proposalId: proposal.id,
+      proposalId: proposal.proposal_id,
       solarCapacity: proposal.solar_capacity,
       batteryStorage: proposal.battery_storage,
       monthlyFee: proposal.monthly_fee,
