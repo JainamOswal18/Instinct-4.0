@@ -121,7 +121,7 @@ router.post(
 
     const { error: alertError } = await db.from('provider_alerts').insert({
       id: randomUUID(),
-      type: 'service_request',
+      type: 'new_request',
       severity: 'info',
       title: `New proposal from ${user?.name || 'Customer'}`,
       message: `${user?.name || 'A customer'} submitted a ${service.title} request for provider review.`,

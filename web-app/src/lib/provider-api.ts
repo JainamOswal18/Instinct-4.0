@@ -209,7 +209,7 @@ export async function createProviderBillingDraft(payload: {
     totalAmount: number;
     sentAt: string | null;
   }>('/provider/billing/drafts', {
-    propertyId: payload.propertyId,
+    ...(payload.propertyId.trim() ? { propertyId: payload.propertyId.trim() } : {}),
     surveyId: payload.surveyId,
     title: payload.title,
     description: payload.description,

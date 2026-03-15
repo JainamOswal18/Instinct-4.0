@@ -11,7 +11,7 @@ import { sendError, sendSuccess } from '../utils/api-response';
 const router = Router();
 
 const draftSchema = z.object({
-  propertyId: z.string().min(1),
+  propertyId: z.string().optional(),
   surveyId: z.string().optional(),
   title: z.string().min(2),
   description: z.string().optional(),
@@ -42,10 +42,38 @@ router.post(
     const authUser = (req as any).user;
     const db = getEaasClient();
 
+    let resolvedPropertyId = parsed.data.propertyId?.trim() || null;
+    if (!resolvedPropertyId && parsed.data.surveyId) {
+      const { data: linkedRequest, error: linkedRequestError } = await db
+        .from('service_requests')
+        .select('property_id,user_id')
+        .eq('id', parsed.data.surveyId)
+        .maybeSingle();
+      assertNoDbError(linkedRequestError);
+
+      resolvedPropertyId = linkedRequest?.property_id || null;
+      if (!resolvedPropertyId && linkedRequest?.user_id) {
+        const { data: requestUser, error: requestUserError } = await db
+          .from('users')
+          .select('current_property_id')
+          .eq('id', linkedRequest.user_id)
+          .maybeSingle();
+        assertNoDbError(requestUserError);
+        resolvedPropertyId = requestUser?.current_property_id || null;
+      }
+    }
+
+    if (!resolvedPropertyId) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid request parameters', {
+        propertyId: ['Property is required to create billing draft'],
+      });
+      return;
+    }
+
     const { data: property, error: propertyError } = await db
       .from('properties')
       .select('id,user_id,plan_type')
-      .eq('id', parsed.data.propertyId)
+      .eq('id', resolvedPropertyId)
       .maybeSingle();
     assertNoDbError(propertyError);
     if (!property) {
@@ -66,7 +94,7 @@ router.post(
 
       const { error: billInsertError } = await db.from('bills').insert({
         id: billId,
-        property_id: parsed.data.propertyId,
+        property_id: resolvedPropertyId,
         month: new Date().toISOString().slice(0, 7),
         total_amount: totalAmount,
         subscription_fee: parsed.data.charges.subscriptionFee,
@@ -83,7 +111,7 @@ router.post(
     const { error: draftInsertError } = await db.from('provider_billing_drafts').insert({
       id: draftId,
       provider_user_id: authUser.userId,
-      property_id: parsed.data.propertyId,
+      property_id: resolvedPropertyId,
       survey_id: parsed.data.surveyId || null,
       bill_id: billId,
       title: parsed.data.title,
