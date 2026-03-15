@@ -337,7 +337,7 @@ export default function AuthPage() {
                       <Input
                         id="signup-password"
                         type="password"
-                        placeholder="Min. 6 characters"
+                        placeholder="Min. 8 characters"
                         value={signupPassword}
                         onChange={(e) => setSignupPassword(e.target.value)}
                         className="pl-10"
