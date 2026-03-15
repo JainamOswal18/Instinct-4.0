@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { assertNoDbError, getEaasClient } from '../lib/eaas-db';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
@@ -13,8 +14,14 @@ const adjustBillSchema = z.object({
   usageCharge: z.number().nonnegative().optional(),
   subscriptionFee: z.number().nonnegative().optional(),
   taxes: z.number().nonnegative().optional(),
-  status: z.enum(['pending', 'paid']).optional(),
+  status: z.enum(['pending', 'accepted', 'disputed', 'paid']).optional(),
   note: z.string().max(500).optional(),
+});
+
+const disputeSchema = z.object({
+  subject: z.string().min(3).default('Billing dispute raised'),
+  description: z.string().min(10),
+  priority: z.enum(['low', 'medium', 'high']).default('medium'),
 });
 
 function escapePdfText(value: string): string {
@@ -170,6 +177,147 @@ router.get(
       status: bill.status,
       dueDate: bill.due_date,
       generatedAt: bill.generated_at,
+    });
+  }),
+);
+
+router.post(
+  '/:billId/accept',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthRequest;
+    const billId = String(req.params.billId);
+    const db = getEaasClient();
+
+    const { data: bill, error: billError } = await db
+      .from('bills')
+      .select('id,property_id,status,due_date')
+      .eq('id', billId)
+      .maybeSingle();
+    assertNoDbError(billError);
+
+    if (!bill) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    const { data: property, error: propertyError } = await db
+      .from('properties')
+      .select('id,user_id')
+      .eq('id', bill.property_id)
+      .maybeSingle();
+    assertNoDbError(propertyError);
+
+    if (!property || property.user_id !== authReq.user!.userId) {
+      sendError(res, 403, 'FORBIDDEN', 'Insufficient permissions');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const { data: updatedBill, error: updateBillError } = await db
+      .from('bills')
+      .update({ status: 'accepted' })
+      .eq('id', billId)
+      .select('*')
+      .maybeSingle();
+    assertNoDbError(updateBillError);
+
+    const { data: installation, error: installationError } = await db
+      .from('installations')
+      .select('id')
+      .eq('property_id', bill.property_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    assertNoDbError(installationError);
+
+    if (installation) {
+      const { error: installationUpdateError } = await db
+        .from('installations')
+        .update({ status: 'PROCUREMENT', updated_at: now })
+        .eq('id', installation.id);
+      assertNoDbError(installationUpdateError);
+    }
+
+    sendSuccess(res, {
+      billId,
+      status: updatedBill?.status || 'accepted',
+      acceptedAt: now,
+      nextStep: 'PROCUREMENT',
+    });
+  }),
+);
+
+router.post(
+  '/:billId/dispute',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const parsed = disputeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid request parameters', parsed.error.flatten().fieldErrors);
+      return;
+    }
+
+    const authReq = req as AuthRequest;
+    const billId = String(req.params.billId);
+    const db = getEaasClient();
+
+    const { data: bill, error: billError } = await db
+      .from('bills')
+      .select('id,property_id,status')
+      .eq('id', billId)
+      .maybeSingle();
+    assertNoDbError(billError);
+
+    if (!bill) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    const { data: property, error: propertyError } = await db
+      .from('properties')
+      .select('id,user_id')
+      .eq('id', bill.property_id)
+      .maybeSingle();
+    assertNoDbError(propertyError);
+
+    if (!property || property.user_id !== authReq.user!.userId) {
+      sendError(res, 403, 'FORBIDDEN', 'Insufficient permissions');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const ticketId = randomUUID();
+    const { error: ticketError } = await db.from('support_tickets').insert({
+      id: ticketId,
+      user_id: authReq.user!.userId,
+      property_id: bill.property_id,
+      bill_id: billId,
+      category: 'billing',
+      priority: parsed.data.priority,
+      status: 'open',
+      title: parsed.data.subject,
+      description: parsed.data.description,
+      estimated_response: 'within 24 hours',
+      created_at: now,
+      updated_at: now,
+    });
+    assertNoDbError(ticketError);
+
+    const { error: billUpdateError } = await db.from('bills').update({ status: 'disputed' }).eq('id', billId);
+    assertNoDbError(billUpdateError);
+
+    const { error: draftUpdateError } = await db
+      .from('provider_billing_drafts')
+      .update({ status: 'disputed', disputed_at: now, updated_at: now })
+      .eq('bill_id', billId);
+    assertNoDbError(draftUpdateError);
+
+    sendSuccess(res, {
+      billId,
+      ticketId,
+      status: 'disputed',
+      raisedAt: now,
     });
   }),
 );

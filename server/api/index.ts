@@ -14,6 +14,17 @@ import billingRoutes from '../src/routes/billing.routes';
 import supportRoutes from '../src/routes/support.routes';
 import aiRoutes from '../src/routes/ai.routes';
 import maintenanceRoutes from '../src/routes/maintenance.routes';
+import servicesRoutes from '../src/routes/services.routes';
+import insightsRoutes from '../src/routes/insights.routes';
+import providerDashboardRoutes from '../src/routes/provider.dashboard.routes';
+import providerInstallationsRoutes from '../src/routes/provider.installations.routes';
+import providerCustomersRoutes from '../src/routes/provider.customers.routes';
+import providerRevenueRoutes from '../src/routes/provider.revenue.routes';
+import providerTicketsRoutes from '../src/routes/provider.tickets.routes';
+import providerEquipmentRoutes from '../src/routes/provider.equipment.routes';
+import providerAlertsRoutes from '../src/routes/provider.alerts.routes';
+import providerBillingRoutes from '../src/routes/provider.billing.routes';
+import providerProfileRoutes from '../src/routes/provider.profile.routes';
 import swaggerSpec from '../src/config/swagger';
 
 const CDN = 'https://unpkg.com/swagger-ui-dist@5.32.0';
@@ -72,6 +83,20 @@ app.use(['/support', '/api/support'], supportRoutes);
 app.use(['/user', '/api/user'], userRoutes);
 app.use(['/ai', '/api/ai'], aiRoutes);
 app.use(['/maintenance', '/api/maintenance'], maintenanceRoutes);
+app.use(['/services', '/api/services'], servicesRoutes);
+app.use(['/insights', '/api/insights'], insightsRoutes);
+app.use(
+  ['/provider', '/api/provider'],
+  providerDashboardRoutes,
+  providerInstallationsRoutes,
+  providerCustomersRoutes,
+  providerRevenueRoutes,
+  providerTicketsRoutes,
+  providerEquipmentRoutes,
+  providerAlertsRoutes,
+  providerBillingRoutes,
+  providerProfileRoutes,
+);
 
 // ── Swagger UI (CDN-backed, works in serverless) ──────────────
 app.get('/api/docs', (_req, res) => {

@@ -46,6 +46,8 @@ function collectRouteOperations() {
     'provider.tickets.routes.ts': '/provider',
     'provider.equipment.routes.ts': '/provider',
     'provider.alerts.routes.ts': '/provider',
+    'provider.billing.routes.ts': '/provider',
+    'provider.profile.routes.ts': '/provider',
   };
 
   const operations = new Set(['GET /health']);
@@ -654,6 +656,139 @@ async function main() {
     { method: 'PATCH', headers: { Authorization: `Bearer ${executiveToken}` } },
     [200],
     'PATCH /provider/alerts/dismiss-all',
+  );
+
+  const sentDraft = await callApi(
+    'provider.billing.draft.create.sent',
+    '/api/provider/billing/drafts',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        propertyId,
+        surveyId,
+        title: 'Smoke Custom Plan Sent',
+        description: 'Sent from smoke test',
+        lineItems: [{ label: 'Inverter', amount: 45000 }],
+        charges: { subscriptionFee: 2400, usageCharge: 1300, taxes: 300 },
+        status: 'sent',
+      }),
+    },
+    [200],
+    'POST /provider/billing/drafts',
+  );
+  const sentDraftBillId = sentDraft.body?.data?.billId;
+  assertCondition(Boolean(sentDraftBillId), 'sent draft billId missing');
+
+  await callApi(
+    'provider.billing.draft.create.draft',
+    '/api/provider/billing/drafts',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        propertyId,
+        surveyId,
+        title: 'Smoke Custom Plan Draft',
+        description: 'Draft from smoke test',
+        lineItems: [{ label: 'Battery', amount: 52000 }],
+        charges: { subscriptionFee: 2200, usageCharge: 1200, taxes: 250 },
+        status: 'draft',
+      }),
+    },
+    [200],
+    'POST /provider/billing/drafts',
+  );
+
+  const disputeDraft = await callApi(
+    'provider.billing.draft.create.dispute-target',
+    '/api/provider/billing/drafts',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        propertyId,
+        surveyId,
+        title: 'Smoke Dispute Target Plan',
+        description: 'Dispute target',
+        lineItems: [{ label: 'Panels', amount: 78000 }],
+        charges: { subscriptionFee: 2600, usageCharge: 1400, taxes: 320 },
+        status: 'sent',
+      }),
+    },
+    [200],
+    'POST /provider/billing/drafts',
+  );
+  const disputeBillId = disputeDraft.body?.data?.billId;
+  assertCondition(Boolean(disputeBillId), 'dispute draft billId missing');
+
+  await callApi(
+    'provider.billing.draft.list',
+    '/api/provider/billing/drafts',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/billing/drafts',
+  );
+
+  await callApi(
+    'provider.requests.queue',
+    '/api/provider/requests',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/requests',
+  );
+
+  await callApi(
+    'provider.profile.get',
+    '/api/provider/profile',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/profile',
+  );
+
+  await callApi(
+    'provider.profile.patch',
+    '/api/provider/profile',
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        companyName: 'Smoke Energy Pvt Ltd',
+        brandingName: 'Smoke Energy',
+        supportEmail: 'smoke-support@example.com',
+        supportPhone: '+919000000001',
+        notificationPreferences: { email: true, sms: false },
+      }),
+    },
+    [200],
+    'PATCH /provider/profile',
+  );
+
+  await callApi(
+    'billing.accept',
+    `/api/billing/${sentDraftBillId}/accept`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    },
+    [200],
+    'POST /billing/{billId}/accept',
+  );
+
+  await callApi(
+    'billing.dispute',
+    `/api/billing/${disputeBillId}/dispute`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: 'Smoke billing dispute',
+        description: 'The billed usage appears incorrect for this cycle.',
+        priority: 'medium',
+      }),
+    },
+    [200],
+    'POST /billing/{billId}/dispute',
   );
 
   await seedRow('seed.service_history', 'service_history', {

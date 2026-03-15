@@ -1336,8 +1336,16 @@
         "summary": "List installations",
         "parameters": [
           { "in": "query", "name": "status", "schema": { "type": "string" } },
-          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
-          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 20 }
+          }
         ],
         "responses": {
           "200": {
@@ -1372,7 +1380,12 @@
         "tags": ["Provider"],
         "summary": "Get installation details",
         "parameters": [
-          { "in": "path", "name": "installationId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "installationId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "responses": {
           "200": {
@@ -1391,7 +1404,12 @@
         "tags": ["Provider"],
         "summary": "Update installation status",
         "parameters": [
-          { "in": "path", "name": "installationId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "installationId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1423,8 +1441,16 @@
         "summary": "List provider customers",
         "parameters": [
           { "in": "query", "name": "search", "schema": { "type": "string" } },
-          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
-          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 20 }
+          }
         ],
         "responses": {
           "200": {
@@ -1443,8 +1469,17 @@
         "tags": ["Provider"],
         "summary": "Get customer consumption",
         "parameters": [
-          { "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } },
-          { "in": "query", "name": "period", "schema": { "type": "string", "enum": ["day", "week", "month"] } }
+          {
+            "in": "path",
+            "name": "propertyId",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": { "type": "string", "enum": ["day", "week", "month"] }
+          }
         ],
         "responses": {
           "200": {
@@ -1495,9 +1530,24 @@
         "tags": ["Provider"],
         "summary": "List payment statuses",
         "parameters": [
-          { "in": "query", "name": "status", "schema": { "type": "string", "enum": ["paid", "pending", "overdue"] } },
-          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
-          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": ["paid", "pending", "overdue"]
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 20 }
+          }
         ],
         "responses": {
           "200": {
@@ -1547,8 +1597,16 @@
           { "in": "query", "name": "status", "schema": { "type": "string" } },
           { "in": "query", "name": "priority", "schema": { "type": "string" } },
           { "in": "query", "name": "category", "schema": { "type": "string" } },
-          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
-          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 20 }
+          }
         ],
         "responses": {
           "200": {
@@ -1567,7 +1625,12 @@
         "tags": ["Provider"],
         "summary": "Get ticket details",
         "parameters": [
-          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "responses": {
           "200": {
@@ -1584,7 +1647,12 @@
         "tags": ["Provider"],
         "summary": "Update ticket",
         "parameters": [
-          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1614,7 +1682,12 @@
         "tags": ["Provider"],
         "summary": "Approve ticket resolution action",
         "parameters": [
-          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1644,7 +1717,12 @@
         "tags": ["Provider"],
         "summary": "Resolve ticket",
         "parameters": [
-          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "ticketId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1675,8 +1753,16 @@
         "summary": "List equipment",
         "parameters": [
           { "in": "query", "name": "status", "schema": { "type": "string" } },
-          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
-          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 20 }
+          }
         ],
         "responses": {
           "200": {
@@ -1695,7 +1781,12 @@
         "tags": ["Provider"],
         "summary": "Get equipment details",
         "parameters": [
-          { "in": "path", "name": "equipmentId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "equipmentId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "responses": {
           "200": {
@@ -1714,7 +1805,12 @@
         "tags": ["Provider"],
         "summary": "Update equipment status",
         "parameters": [
-          { "in": "path", "name": "equipmentId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "equipmentId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1744,7 +1840,12 @@
         "tags": ["Provider"],
         "summary": "Schedule equipment maintenance",
         "parameters": [
-          { "in": "path", "name": "equipmentId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "equipmentId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -1776,9 +1877,21 @@
         "parameters": [
           { "in": "query", "name": "severity", "schema": { "type": "string" } },
           { "in": "query", "name": "type", "schema": { "type": "string" } },
-          { "in": "query", "name": "dismissed", "schema": { "type": "boolean", "default": false } },
-          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
-          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+          {
+            "in": "query",
+            "name": "dismissed",
+            "schema": { "type": "boolean", "default": false }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 20 }
+          }
         ],
         "responses": {
           "200": {
@@ -1797,7 +1910,12 @@
         "tags": ["Provider"],
         "summary": "Dismiss single alert",
         "parameters": [
-          { "in": "path", "name": "alertId", "required": true, "schema": { "type": "string" } }
+          {
+            "in": "path",
+            "name": "alertId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "responses": {
           "200": {
@@ -1821,6 +1939,179 @@
         "responses": {
           "200": {
             "description": "Alerts dismissed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/billing/drafts": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List provider billing drafts",
+        "parameters": [
+          { "in": "query", "name": "status", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drafts list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Provider"],
+        "summary": "Create provider billing draft",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "propertyId": "prop_001",
+                "surveyId": "survey_001",
+                "title": "Custom Solar Plan",
+                "description": "Adjusted for rooftop area",
+                "lineItems": [{ "label": "Inverter", "amount": 45000 }],
+                "charges": {
+                  "subscriptionFee": 2500,
+                  "usageCharge": 1200,
+                  "taxes": 300
+                },
+                "status": "sent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/requests": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get pending provider requests queue",
+        "responses": {
+          "200": {
+            "description": "Pending requests",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/profile": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get provider profile",
+        "responses": {
+          "200": {
+            "description": "Provider profile",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Provider"],
+        "summary": "Update provider profile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "companyName": "EaaS Solar Pvt Ltd",
+                "brandingName": "EaaS Solar",
+                "supportEmail": "support@eaas.example",
+                "supportPhone": "+91 9999999999",
+                "notificationPreferences": { "email": true, "sms": false }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider profile updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/{billId}/accept": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Accept billing plan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "billId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bill accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/{billId}/dispute": {
+      "post": {
+        "tags": ["Billing"],
+        "summary": "Dispute billing plan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "billId",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "subject": "Incorrect usage charge",
+                "description": "The usage charge appears too high for this month.",
+                "priority": "medium"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bill dispute created",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/SuccessResponse" }

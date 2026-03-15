@@ -26,6 +26,8 @@ import providerRevenueRoutes from './routes/provider.revenue.routes';
 import providerTicketsRoutes from './routes/provider.tickets.routes';
 import providerEquipmentRoutes from './routes/provider.equipment.routes';
 import providerAlertsRoutes from './routes/provider.alerts.routes';
+import providerBillingRoutes from './routes/provider.billing.routes';
+import providerProfileRoutes from './routes/provider.profile.routes';
 import swaggerSpec from './config/swagger';
 import { verifyToken } from './utils/jwt';
 import { publishEnergyEvent } from './utils/realtime';
@@ -89,6 +91,8 @@ app.use(
   providerTicketsRoutes,
   providerEquipmentRoutes,
   providerAlertsRoutes,
+  providerBillingRoutes,
+  providerProfileRoutes,
 );
 
 // ── Swagger UI ────────────────────────────────────────────────
