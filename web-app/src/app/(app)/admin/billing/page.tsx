@@ -8,15 +8,34 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { adjustAdminBill, fetchAdminBills } from '@/lib/admin-api';
+import { API_BASE_URL } from '@/lib/api';
+import { getAccessToken } from '@/lib/auth';
+
+const formatINR = (amount: number) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(amount);
 
 type AdminBill = {
   billId: string;
+  propertyId: string;
+  propertyName: string | null;
+  propertyAddress: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  customerEmail: string | null;
   month: string;
   totalAmount: number;
   usageCharge: number;
   subscriptionFee: number;
   taxes: number;
   status: string;
+  dueDate: string;
+  paidDate: string | null;
+  generatedAt: string;
+  pdfUrl: string | null;
 };
 
 export default function AdminBillingPage() {
@@ -77,6 +96,43 @@ export default function AdminBillingPage() {
     }
   };
 
+  const onDownloadInvoice = async (billId: string) => {
+    try {
+      const token = getAccessToken();
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/billing/download/${billId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${billId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast({ title: 'Invoice download started' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to download invoice',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -94,6 +150,8 @@ export default function AdminBillingPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Bill</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Property</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Taxes</TableHead>
@@ -106,8 +164,24 @@ export default function AdminBillingPage() {
                   <TableCell>
                     <div className="font-medium">{bill.billId}</div>
                     <div className="text-xs text-muted-foreground">{bill.month}</div>
+                    <div className="text-xs text-muted-foreground">Generated: {new Date(bill.generatedAt).toLocaleDateString()}</div>
+                    <div className="text-xs text-muted-foreground">Due: {new Date(bill.dueDate).toLocaleDateString()}</div>
+                    {bill.paidDate && <div className="text-xs text-muted-foreground">Paid: {new Date(bill.paidDate).toLocaleDateString()}</div>}
                   </TableCell>
-                  <TableCell>₹{bill.totalAmount.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{bill.customerName || 'Unknown'}</div>
+                    <div className="text-xs text-muted-foreground">{bill.customerEmail || bill.customerId || 'No email'}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{bill.propertyName || bill.propertyId}</div>
+                    <div className="text-xs text-muted-foreground">{bill.propertyAddress || 'No address'}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{formatINR(bill.totalAmount)}</div>
+                    <div className="text-xs text-muted-foreground">Usage: {formatINR(bill.usageCharge)}</div>
+                    <div className="text-xs text-muted-foreground">Subscription: {formatINR(bill.subscriptionFee)}</div>
+                    <div className="text-xs text-muted-foreground">Taxes: {formatINR(bill.taxes)}</div>
+                  </TableCell>
                   <TableCell>
                     <Select value={bill.status} onValueChange={(value) => onStatusChange(bill.billId, value as 'pending' | 'paid')}>
                       <SelectTrigger className="w-[130px]">
@@ -128,9 +202,14 @@ export default function AdminBillingPage() {
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" onClick={() => onTaxUpdate(bill)}>
-                      Save
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => onTaxUpdate(bill)}>
+                        Save
+                      </Button>
+                      <Button variant="secondary" onClick={() => onDownloadInvoice(bill.billId)}>
+                        View Invoice
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

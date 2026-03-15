@@ -17,6 +17,128 @@ const adjustBillSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
+function escapePdfText(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function formatInvoiceAmount(amount: unknown): string {
+  return `INR ${Number(amount || 0).toFixed(2)}`;
+}
+
+function formatInvoiceDate(date: string | null | undefined): string {
+  if (!date) return '-';
+  return new Date(date).toLocaleString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function buildStyledInvoicePdf(payload: {
+  bill: any;
+  propertyName?: string | null;
+  propertyAddress?: string | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+}): Buffer {
+  const { bill, propertyName, propertyAddress, customerName, customerEmail } = payload;
+  const status = String(bill.status || 'pending').toLowerCase();
+  const statusColor = status === 'paid' ? '0.16 0.58 0.20' : '0.76 0.48 0.10';
+
+  const line = (x1: number, y1: number, x2: number, y2: number) => `${x1} ${y1} m ${x2} ${y2} l S`;
+  const text = (x: number, y: number, value: string, size = 11, bold = false) =>
+    `BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${escapePdfText(value)}) Tj ET`;
+
+  const contentCommands = [
+    '0.08 0.14 0.27 rg',
+    '36 736 540 40 re f',
+    '1 1 1 rg',
+    text(50, 751, 'EaaS NEXUS · TAX INVOICE', 14, true),
+    text(430, 751, String(bill.month || '-'), 11, true),
+
+    '0.15 0.15 0.15 rg',
+    text(50, 712, `Invoice ID: ${bill.id}`, 11, true),
+    text(50, 694, `Generated: ${formatInvoiceDate(bill.generated_at)}`),
+    text(50, 676, `Due Date: ${formatInvoiceDate(bill.due_date)}`),
+
+    text(310, 712, `Status: ${String(bill.status || 'pending').toUpperCase()}`, 11, true),
+    `${statusColor} rg`,
+    '306 704 220 2 re f',
+
+    '0.35 0.35 0.35 RG',
+    '0.8 w',
+    line(36, 658, 576, 658),
+
+    '0.2 0.2 0.2 rg',
+    text(50, 638, 'Bill To', 11, true),
+    text(50, 620, customerName || 'Customer'),
+    text(50, 603, customerEmail || '-'),
+
+    text(310, 638, 'Property', 11, true),
+    text(310, 620, propertyName || String(bill.property_id || '-')),
+    text(310, 603, propertyAddress || '-'),
+
+    '0.35 0.35 0.35 RG',
+    line(36, 580, 576, 580),
+
+    '0.08 0.14 0.27 rg',
+    text(50, 560, 'Charge Breakdown', 11, true),
+    '0.2 0.2 0.2 rg',
+
+    text(50, 536, 'Usage Charge'),
+    text(470, 536, formatInvoiceAmount(bill.usage_charge), 11, true),
+    text(50, 516, 'Subscription Fee'),
+    text(470, 516, formatInvoiceAmount(bill.subscription_fee), 11, true),
+    text(50, 496, 'Taxes'),
+    text(470, 496, formatInvoiceAmount(bill.taxes), 11, true),
+
+    '0.35 0.35 0.35 RG',
+    line(36, 478, 576, 478),
+
+    '0.08 0.14 0.27 rg',
+    text(50, 456, 'Total Amount Due', 12, true),
+    text(450, 456, formatInvoiceAmount(bill.total_amount), 14, true),
+
+    '0.6 0.6 0.6 RG',
+    line(36, 120, 576, 120),
+    '0.35 0.35 0.35 rg',
+    text(50, 98, 'This is a system-generated invoice from EaaS Nexus.'),
+    text(50, 82, 'For support queries, please contact support via the app help center.'),
+  ];
+
+  const contentStream = contentCommands.join('\n');
+
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+    `<< /Length ${Buffer.byteLength(contentStream, 'utf8')} >>\nstream\n${contentStream}\nendstream`,
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(Buffer.byteLength(pdf, 'utf8'));
+    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+
+  const xrefStart = Buffer.byteLength(pdf, 'utf8');
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+
+  for (let index = 1; index < offsets.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
+  }
+
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(pdf, 'utf8');
+}
+
 router.get(
   '/current/:propertyId',
   authenticate,
@@ -107,10 +229,30 @@ router.get(
       return;
     }
 
-    const content = `Bill ID: ${bill.id}\nMonth: ${bill.month}\nTotal: ₹${bill.total_amount}\nStatus: ${bill.status}`;
+    const { data: property, error: propertyError } = await db
+      .from('properties')
+      .select('id,name,address,user_id')
+      .eq('id', String(bill.property_id))
+      .maybeSingle();
+    assertNoDbError(propertyError);
+
+    const { data: customer, error: customerError } = property?.user_id
+      ? await db.from('users').select('id,name,email').eq('id', String(property.user_id)).maybeSingle()
+      : { data: null, error: null as any };
+    assertNoDbError(customerError as any);
+
+    const pdfBuffer = buildStyledInvoicePdf({
+      bill,
+      propertyName: property?.name || null,
+      propertyAddress: property?.address || null,
+      customerName: (customer as any)?.name || null,
+      customerEmail: (customer as any)?.email || null,
+    });
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${bill.id}.pdf"`);
-    res.send(Buffer.from(content));
+    res.setHeader('Content-Length', String(pdfBuffer.length));
+    res.send(pdfBuffer);
   }),
 );
 
@@ -130,19 +272,47 @@ router.get(
       .range(offset, offset + Math.max(limit - 1, 0));
     assertNoDbError(error);
 
+    const billList = bills || [];
+    const propertyIds = Array.from(new Set(billList.map((bill: any) => bill.property_id).filter(Boolean)));
+    const { data: properties, error: propertiesError } =
+      propertyIds.length > 0
+        ? await db.from('properties').select('id,user_id,name,address').in('id', propertyIds)
+        : { data: [], error: null as any };
+    assertNoDbError(propertiesError as any);
+
+    const userIds = Array.from(new Set((properties || []).map((property: any) => property.user_id).filter(Boolean)));
+    const { data: users, error: usersError } =
+      userIds.length > 0 ? await db.from('users').select('id,name,email').in('id', userIds) : { data: [], error: null as any };
+    assertNoDbError(usersError as any);
+
+    const propertyMap = new Map((properties || []).map((property: any) => [property.id, property]));
+    const userMap = new Map((users || []).map((user: any) => [user.id, user]));
+
     sendSuccess(res, {
-      bills: (bills || []).map((bill: any) => ({
-        billId: bill.id,
-        propertyId: bill.property_id,
-        month: bill.month,
-        totalAmount: bill.total_amount,
-        subscriptionFee: bill.subscription_fee,
-        usageCharge: bill.usage_charge,
-        taxes: bill.taxes,
-        status: bill.status,
-        dueDate: bill.due_date,
-        generatedAt: bill.generated_at,
-      })),
+      bills: billList.map((bill: any) => {
+        const property = propertyMap.get(bill.property_id);
+        const customer = property ? userMap.get(property.user_id) : null;
+
+        return {
+          billId: bill.id,
+          propertyId: bill.property_id,
+          propertyName: property?.name || null,
+          propertyAddress: property?.address || null,
+          customerId: property?.user_id || null,
+          customerName: customer?.name || null,
+          customerEmail: customer?.email || null,
+          month: bill.month,
+          totalAmount: bill.total_amount,
+          subscriptionFee: bill.subscription_fee,
+          usageCharge: bill.usage_charge,
+          taxes: bill.taxes,
+          status: bill.status,
+          dueDate: bill.due_date,
+          paidDate: bill.paid_date,
+          generatedAt: bill.generated_at,
+          pdfUrl: bill.pdf_url,
+        };
+      }),
     });
   }),
 );

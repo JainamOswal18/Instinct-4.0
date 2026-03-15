@@ -5,6 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { fetchAdminOverview } from '@/lib/admin-api';
 
+const formatINR = (amount: number) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(amount);
+
 export default function AnalyticsPage() {
   const { toast } = useToast();
   const [overview, setOverview] = useState<{
@@ -34,7 +41,7 @@ export default function AnalyticsPage() {
         { label: 'Total Users', value: String(overview.totalUsers) },
         { label: 'Total Properties', value: String(overview.totalProperties) },
         { label: 'Open Tickets', value: String(overview.openTickets) },
-        { label: 'Revenue', value: `₹${overview.totalRevenue.toFixed(2)}` },
+        { label: 'Revenue', value: formatINR(overview.totalRevenue) },
         { label: 'Total Production', value: `${overview.totalProduction.toFixed(2)} kWh` },
         { label: 'Total Consumption', value: `${overview.totalConsumption.toFixed(2)} kWh` },
         { label: 'Net Offset', value: `${overview.netOffsetPercent}%` },

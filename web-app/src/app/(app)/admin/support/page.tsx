@@ -4,21 +4,60 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { fetchAdminTickets, updateAdminTicket } from '@/lib/admin-api';
+import { fetchAdminTicketDetail, fetchAdminTickets, replyToAdminTicket, updateAdminTicket } from '@/lib/admin-api';
 
 type AdminTicket = {
   id: string;
+  userId: string;
+  propertyId: string;
+  propertyName: string | null;
+  propertyAddress: string | null;
   title: string;
+  description: string;
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority: 'low' | 'medium' | 'high';
   category: string;
+  createdAt: string;
   updatedAt: string;
+  raisedBy: {
+    id: string;
+    name: string;
+    email: string | null;
+  };
+  answeredBy: {
+    id: string;
+    name: string;
+    email: string | null;
+    repliedAt: string | null;
+  } | null;
+  messageCount: number;
+};
+
+type TicketMessage = {
+  id: string;
+  message: string;
+  messageType: 'customer' | 'admin_reply' | 'system';
+  createdAt: string;
+  author: {
+    id: string;
+    name: string;
+    email: string | null;
+  };
 };
 
 export default function AdminSupportPage() {
   const { toast } = useToast();
   const [tickets, setTickets] = useState<AdminTicket[]>([]);
+  const [selectedTicket, setSelectedTicket] = useState<AdminTicket | null>(null);
+  const [messages, setMessages] = useState<TicketMessage[]>([]);
+  const [replyText, setReplyText] = useState('');
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isSendingReply, setIsSendingReply] = useState(false);
 
   const load = async () => {
     try {
@@ -54,6 +93,44 @@ export default function AdminSupportPage() {
     }
   };
 
+  const openTicketDetail = async (ticket: AdminTicket) => {
+    try {
+      const detail = await fetchAdminTicketDetail(ticket.id);
+      setSelectedTicket(ticket);
+      setMessages(detail.messages);
+      setReplyText('');
+      setIsDetailOpen(true);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load ticket details',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  const sendReply = async () => {
+    if (!selectedTicket || !replyText.trim()) return;
+
+    try {
+      setIsSendingReply(true);
+      await replyToAdminTicket(selectedTicket.id, replyText.trim());
+      const detail = await fetchAdminTicketDetail(selectedTicket.id);
+      setMessages(detail.messages);
+      setReplyText('');
+      await load();
+      toast({ title: 'Reply sent' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to send reply',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -71,9 +148,12 @@ export default function AdminSupportPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
+                <TableHead>Raised By</TableHead>
+                <TableHead>Last Answered By</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Priority</TableHead>
+                <TableHead className="text-right">Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -81,7 +161,25 @@ export default function AdminSupportPage() {
                 <TableRow key={ticket.id}>
                   <TableCell>
                     <div className="font-medium">{ticket.title}</div>
+                    <div className="text-xs text-muted-foreground">{ticket.propertyName || ticket.propertyId}</div>
                     <div className="text-xs text-muted-foreground">Updated: {new Date(ticket.updatedAt).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">Messages: {ticket.messageCount}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{ticket.raisedBy.name}</div>
+                    <div className="text-xs text-muted-foreground">{ticket.raisedBy.email || 'No email'}</div>
+                  </TableCell>
+                  <TableCell>
+                    {ticket.answeredBy ? (
+                      <>
+                        <div className="font-medium">{ticket.answeredBy.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {ticket.answeredBy.repliedAt ? new Date(ticket.answeredBy.repliedAt).toLocaleString() : 'Recent'}
+                        </div>
+                      </>
+                    ) : (
+                      <Badge variant="outline">No reply yet</Badge>
+                    )}
                   </TableCell>
                   <TableCell>{ticket.category}</TableCell>
                   <TableCell>
@@ -109,12 +207,56 @@ export default function AdminSupportPage() {
                       </SelectContent>
                     </Select>
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" onClick={() => openTicketDetail(ticket)}>
+                      View Thread
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedTicket?.title || 'Ticket Details'}</DialogTitle>
+            <DialogDescription>
+              Raised by {selectedTicket?.raisedBy.name || '-'} · {selectedTicket?.propertyName || selectedTicket?.propertyId || '-'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+            {messages.map((message) => (
+              <div key={message.id} className="rounded-md border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">{message.author.name}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</div>
+                </div>
+                <div className="text-xs text-muted-foreground mb-2">{message.author.email || 'No email'} · {message.messageType}</div>
+                <p className="text-sm whitespace-pre-wrap">{message.message}</p>
+              </div>
+            ))}
+            {messages.length === 0 && <div className="text-sm text-muted-foreground">No messages yet.</div>}
+          </div>
+
+          <div className="space-y-2">
+            <Textarea
+              placeholder="Write a response to this ticket..."
+              value={replyText}
+              onChange={(event) => setReplyText(event.target.value)}
+              rows={4}
+            />
+            <div className="flex justify-end">
+              <Button onClick={sendReply} disabled={isSendingReply || !replyText.trim()}>
+                {isSendingReply ? 'Sending...' : 'Send Reply'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

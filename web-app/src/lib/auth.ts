@@ -32,6 +32,10 @@ interface AuthApiPayload {
   accessToken: string;
 }
 
+function normalizeRole(role: unknown): AppRole {
+  return role === 'ADMIN' || role === 'EXECUTIVE' || role === 'CITIZEN' ? role : 'CITIZEN';
+}
+
 function persistSession(payload: AuthApiPayload): void {
   if (typeof window === 'undefined') return;
 
@@ -40,7 +44,7 @@ function persistSession(payload: AuthApiPayload): void {
     email: payload.user.email,
     name: payload.user.name,
     phone: payload.user.phone ?? null,
-    role: payload.user.role,
+    role: normalizeRole(payload.user.role),
     accessToken: payload.accessToken,
   };
 

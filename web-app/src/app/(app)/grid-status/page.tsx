@@ -1,76 +1,18 @@
 'use client';
 
+import { useEffect, useState, type ElementType } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Activity, TowerControl, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
+import { useToast } from '@/hooks/use-toast';
+import { fetchCurrentUserProfile, fetchGridInsights, fetchUserProperties } from '@/lib/customer-api';
+import { fetchAdminProperties } from '@/lib/admin-api';
+import { getSession } from '@/lib/auth';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ChartConfig } from "@/components/ui/chart";
-
-const gridStats = [
-    {
-        label: "Grid Frequency",
-        value: "49.98 Hz",
-        status: "Stable",
-        icon: Activity,
-    },
-    {
-        label: "Voltage Level",
-        value: "230.5 kV",
-        status: "Normal",
-        icon: TowerControl,
-    },
-    {
-        label: "Current Load",
-        value: "1.2 GW",
-        status: "High",
-        icon: AlertCircle,
-    },
-    {
-        label: "DISCOM Status",
-        value: "Connected",
-        status: "Good",
-        icon: CheckCircle,
-    }
-];
-
-const gridEvents = [
-    {
-        id: "EVT-001",
-        timestamp: "2024-07-28 14:35:10",
-        description: "Voltage dip detected in Sub-grid B",
-        severity: "Medium"
-    },
-    {
-        id: "EVT-002",
-        timestamp: "2024-07-28 14:30:02",
-        description: "Load exceeded 1.1 GW threshold",
-        severity: "High"
-    },
-    {
-        id: "EVT-003",
-        timestamp: "2024-07-28 13:55:45",
-        description: "Frequency stabilized at 49.98 Hz",
-        severity: "Low"
-    },
-    {
-        id: "EVT-004",
-        timestamp: "2024-07-28 12:10:18",
-        description: "Scheduled maintenance on Transformer T-04 complete",
-        severity: "Info"
-    }
-]
-
-const demandData = [
-  { time: '08:00', demand: 850 },
-  { time: '09:00', demand: 950 },
-  { time: '10:00', demand: 1050 },
-  { time: '11:00', demand: 1100 },
-  { time: '12:00', demand: 1150 },
-  { time: '13:00', demand: 1200 },
-  { time: '14:00', demand: 1180 },
-];
 
 const chartConfig = {
   demand: {
@@ -89,12 +31,126 @@ const getSeverityBadge = (severity: string) => {
 }
 
 export default function GridStatusPage() {
+    const { toast } = useToast();
+    const [gridStats, setGridStats] = useState<Array<{ label: string; value: string; status: string; icon: ElementType }>>([]);
+    const [gridEvents, setGridEvents] = useState<Array<{ id: string; timestamp: string; description: string; severity: string }>>([]);
+    const [demandData, setDemandData] = useState<Array<{ time: string; demand: number }>>([]);
+    const [propertyOptions, setPropertyOptions] = useState<Array<{ id: string; name: string; address: string }>>([]);
+    const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+    const [isAdminView, setIsAdminView] = useState(false);
+
+    useEffect(() => {
+        const initialize = async () => {
+            try {
+                const session = getSession();
+                const adminRole = session?.role === 'ADMIN' || session?.role === 'EXECUTIVE';
+                setIsAdminView(adminRole);
+
+                if (adminRole) {
+                    const result = await fetchAdminProperties();
+                    const options = result.properties.map((property) => ({
+                        id: property.id,
+                        name: property.name,
+                        address: property.address,
+                    }));
+                    setPropertyOptions(options);
+                    setSelectedPropertyId(options[0]?.id ?? '');
+                    if (options.length === 0) {
+                        toast({
+                            title: 'No properties available',
+                            description: 'No customer properties found for admin view.',
+                        });
+                    }
+                    return;
+                }
+
+                const profile = await fetchCurrentUserProfile();
+                let propertyId = profile.currentPropertyId;
+
+                if (!propertyId) {
+                    const propertyResult = await fetchUserProperties();
+                    const options = propertyResult.properties.map((property) => ({
+                        id: property.id,
+                        name: property.name,
+                        address: property.address,
+                    }));
+                    setPropertyOptions(options);
+                    propertyId = options[0]?.id ?? null;
+                }
+
+                setSelectedPropertyId(propertyId ?? '');
+                if (!propertyId) {
+                    toast({
+                        title: 'No property found',
+                        description: 'Add a property to view grid insights.',
+                    });
+                }
+            } catch (error) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Failed to initialize grid insights',
+                    description: error instanceof Error ? error.message : 'Unknown error',
+                });
+            }
+        };
+
+        initialize();
+    }, []);
+
+    useEffect(() => {
+        const loadInsights = async () => {
+            if (!selectedPropertyId) {
+                setGridStats([]);
+                setGridEvents([]);
+                setDemandData([]);
+                return;
+            }
+
+            try {
+                const result = await fetchGridInsights(selectedPropertyId);
+                setGridStats([
+                    { label: 'Grid Frequency', value: `${result.stats.gridFrequency.toFixed(2)} Hz`, status: 'Stable', icon: Activity },
+                    { label: 'Voltage Level', value: `${result.stats.voltageLevel.toFixed(1)} kV`, status: 'Normal', icon: TowerControl },
+                    { label: 'Current Load', value: `${result.stats.currentLoad.toFixed(2)} GW`, status: 'Live', icon: AlertCircle },
+                    { label: 'DISCOM Status', value: result.stats.discomStatus, status: 'Live', icon: CheckCircle },
+                ]);
+                setGridEvents(result.events);
+                setDemandData(result.demandSeries);
+            } catch (error) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Failed to load grid insights',
+                    description: error instanceof Error ? error.message : 'Unknown error',
+                });
+            }
+        };
+
+        loadInsights();
+    }, [selectedPropertyId]);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-bold font-headline">Grid Status</h1>
         <p className="text-muted-foreground">View real-time grid information and DISCOM integration status.</p>
       </div>
+
+            {isAdminView && propertyOptions.length > 0 && (
+                <div className="max-w-md">
+                    <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select property" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {propertyOptions.map((property) => (
+                                <SelectItem key={property.id} value={property.id}>
+                                    {property.name} · {property.address}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
 
        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {gridStats.map((stat) => {
@@ -164,7 +220,7 @@ export default function GridStatusPage() {
                                     <div className="font-medium">{event.description}</div>
                                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                                         <Clock className="h-3 w-3" />
-                                        {event.timestamp}
+                                        {new Date(event.timestamp).toLocaleString()}
                                     </div>
 
                                 </TableCell>

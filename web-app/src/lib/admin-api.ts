@@ -100,6 +100,11 @@ export async function fetchAdminBills() {
     bills: Array<{
       billId: string;
       propertyId: string;
+      propertyName: string | null;
+      propertyAddress: string | null;
+      customerId: string | null;
+      customerName: string | null;
+      customerEmail: string | null;
       month: string;
       totalAmount: number;
       subscriptionFee: number;
@@ -107,6 +112,9 @@ export async function fetchAdminBills() {
       taxes: number;
       status: string;
       dueDate: string;
+      paidDate: string | null;
+      generatedAt: string;
+      pdfUrl: string | null;
     }>;
   }>('/billing/admin/all');
 }
@@ -119,17 +127,78 @@ export async function fetchAdminTickets() {
   return adminGet<{
     tickets: Array<{
       id: string;
+      userId: string;
+      propertyId: string;
+      propertyName: string | null;
+      propertyAddress: string | null;
       title: string;
+      description: string;
       status: 'open' | 'in_progress' | 'resolved' | 'closed';
       priority: 'low' | 'medium' | 'high';
       category: string;
+      createdAt: string;
       updatedAt: string;
+      raisedBy: {
+        id: string;
+        name: string;
+        email: string | null;
+      };
+      answeredBy: {
+        id: string;
+        name: string;
+        email: string | null;
+        repliedAt: string | null;
+      } | null;
+      messageCount: number;
     }>;
   }>('/support/admin/tickets');
 }
 
 export async function updateAdminTicket(ticketId: string, payload: { status?: 'open' | 'in_progress' | 'resolved' | 'closed'; priority?: 'low' | 'medium' | 'high' }) {
   return adminPatch(`/support/admin/tickets/${ticketId}`, payload);
+}
+
+export async function fetchAdminTicketDetail(ticketId: string) {
+  return adminGet<{
+    ticket: {
+      id: string;
+      title: string;
+      description: string;
+      category: string;
+      priority: 'low' | 'medium' | 'high';
+      status: 'open' | 'in_progress' | 'resolved' | 'closed';
+      createdAt: string;
+      updatedAt: string;
+      estimatedResponse: string | null;
+      property: {
+        id: string;
+        name: string;
+        address: string;
+      } | null;
+      raisedBy: {
+        id: string;
+        name: string;
+        email: string | null;
+      };
+    };
+    messages: Array<{
+      id: string;
+      message: string;
+      messageType: 'customer' | 'admin_reply' | 'system';
+      createdAt: string;
+      author: {
+        id: string;
+        name: string;
+        email: string | null;
+      };
+    }>;
+  }>(`/support/admin/tickets/${ticketId}`);
+}
+
+export async function replyToAdminTicket(ticketId: string, message: string) {
+  return adminPost<{ messageId: string | null; createdAt: string }>(`/support/admin/tickets/${ticketId}/messages`, {
+    message,
+  });
 }
 
 export async function broadcastAdminNotification(payload: {

@@ -1,19 +1,13 @@
 'use client';
 
+import { useEffect, useState, type ElementType } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChartTooltipContent, ChartContainer } from '@/components/ui/chart';
 import type { ChartConfig } from "@/components/ui/chart";
 import { Leaf, Award, Sun, Wind } from 'lucide-react';
-
-const chartData = [
-  { month: 'Jan', saved: 186, offset: 80 },
-  { month: 'Feb', saved: 305, offset: 200 },
-  { month: 'Mar', saved: 237, offset: 120 },
-  { month: 'Apr', saved: 173, offset: 190 },
-  { month: 'May', saved: 209, offset: 130 },
-  { month: 'Jun', saved: 214, offset: 140 },
-];
+import { useToast } from '@/hooks/use-toast';
+import { fetchCarbonInsights, fetchCurrentUserProfile } from '@/lib/customer-api';
 
 const chartConfig = {
   saved: {
@@ -26,30 +20,45 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const impactStats = [
-    {
-        value: "1.2 Tonnes",
-        label: "Total CO₂ Saved",
-        icon: Leaf
-    },
-    {
-        value: "82 Trees",
-        label: "Equivalent Trees Planted",
-        icon: Award
-    },
-    {
-        value: "1,500 kWh",
-        label: "Renewable Energy Used",
-        icon: Sun
-    },
-    {
-        value: "25%",
-        label: "Reduction in Emissions",
-        icon: Wind
-    }
-]
-
 export default function CarbonFootprintPage() {
+  const { toast } = useToast();
+  const [chartData, setChartData] = useState<Array<{ month: string; saved: number; offset: number }>>([]);
+  const [impactStats, setImpactStats] = useState<Array<{ value: string; label: string; icon: ElementType }>>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const profile = await fetchCurrentUserProfile();
+        if (!profile.currentPropertyId) {
+          setChartData([]);
+          setImpactStats([]);
+          return;
+        }
+
+        const result = await fetchCarbonInsights(profile.currentPropertyId);
+        setChartData(result.monthly);
+        const reduction = result.stats.totalOffsetKg > 0
+          ? Math.round((result.stats.totalSavedKg / result.stats.totalOffsetKg) * 100)
+          : 0;
+
+        setImpactStats([
+          { value: `${(result.stats.totalSavedKg / 1000).toFixed(2)} Tonnes`, label: 'Total CO₂ Saved', icon: Leaf },
+          { value: `${result.stats.equivalentTrees} Trees`, label: 'Equivalent Trees Planted', icon: Award },
+          { value: `${Math.round(result.stats.renewableKwh)} kWh`, label: 'Renewable Energy Used', icon: Sun },
+          { value: `${reduction}%`, label: 'Reduction in Emissions', icon: Wind },
+        ]);
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to load carbon insights',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    };
+
+    load();
+  }, []);
+
   return (
     <div className="flex flex-col gap-6">
       <div>

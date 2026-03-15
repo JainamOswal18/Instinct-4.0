@@ -1,31 +1,30 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { LifeBuoy, Wrench, MessageSquare, Search } from 'lucide-react';
-
-const faqItems = [
-    {
-        question: "How do I read my energy bill?",
-        answer: "Your bill details your consumption in kWh, charges per unit, and any fixed fees. You can find a detailed breakdown in the Billing section."
-    },
-    {
-        question: "What does 'peak hours' mean?",
-        answer: "Peak hours are times of high electricity demand, usually in the evening. Energy might cost more during these times. Check your plan details for specifics."
-    },
-    {
-        question: "My smart device is offline. What should I do?",
-        answer: "First, check if the device has power and is connected to your Wi-Fi. You can also try restarting it. If the problem persists, run a diagnostic from the Support page."
-    },
-    {
-        question: "How can I lower my monthly bill?",
-        answer: "Try reducing consumption during peak hours, using energy-efficient appliances, and checking for any faults reported by our AI."
-    }
-]
+import { useToast } from '@/hooks/use-toast';
+import { fetchSupportFaqs } from '@/lib/customer-api';
 
 export default function SupportPage() {
+    const { toast } = useToast();
+    const [faqItems, setFaqItems] = useState<Array<{ id: string; question: string; answer: string }>>([]);
+
+    useEffect(() => {
+        fetchSupportFaqs()
+            .then((result) => setFaqItems(result.faqs))
+            .catch((error) => {
+                toast({
+                    variant: 'destructive',
+                    title: 'Failed to load FAQs',
+                    description: error instanceof Error ? error.message : 'Unknown error',
+                });
+            });
+    }, []);
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -66,7 +65,7 @@ export default function SupportPage() {
             </div>
             <Accordion type="single" collapsible className="w-full">
                 {faqItems.map((item, index) => (
-                    <AccordionItem key={index} value={`item-${index}`}>
+                    <AccordionItem key={item.id} value={`item-${index}`}>
                         <AccordionTrigger>{item.question}</AccordionTrigger>
                         <AccordionContent>{item.answer}</AccordionContent>
                     </AccordionItem>

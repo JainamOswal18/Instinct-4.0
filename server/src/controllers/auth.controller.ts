@@ -119,6 +119,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       email: userRow.email,
       name: userRow.name,
       phone: userRow.phone,
+      role: userRow.role,
       currentPropertyId: userRow.current_property_id,
       properties: (properties || []).map((property) => mapProperty(property as PropertyRow)),
     },

@@ -350,6 +350,14 @@ async function main() {
   await callApi('energy.stats', `/api/energy/stats/${propertyId}?period=month`, { headers: { Authorization: `Bearer ${token}` } }, [200], 'GET /energy/stats/{propertyId}');
   await callApi('energy.stream', `/api/energy/stream/${propertyId}`, { headers: { Authorization: `Bearer ${token}` } }, [200], 'GET /energy/stream/{propertyId}');
 
+  const gridInsights = await callApi('insights.grid', `/api/insights/grid/${propertyId}`, { headers: { Authorization: `Bearer ${token}` } }, [200]);
+  const gridDemandSeries = gridInsights.body?.data?.demandSeries;
+  const gridEvents = gridInsights.body?.data?.events;
+  record('insights.grid.has-demand', Array.isArray(gridDemandSeries) && gridDemandSeries.length > 0, Array.isArray(gridDemandSeries) ? `points=${gridDemandSeries.length}` : 'missing series');
+  assertCondition(Array.isArray(gridDemandSeries) && gridDemandSeries.length > 0, 'Grid insights demand series missing');
+  record('insights.grid.has-events', Array.isArray(gridEvents) && gridEvents.length > 0, Array.isArray(gridEvents) ? `events=${gridEvents.length}` : 'missing events');
+  assertCondition(Array.isArray(gridEvents) && gridEvents.length > 0, 'Grid insights events missing');
+
   const notificationId = randomUUID();
   await seedRow('seed.notifications', 'notifications', {
     id: notificationId,
@@ -415,6 +423,7 @@ async function main() {
   );
   const createdTicketId = supportTicket.body?.data?.ticketId;
   await callApi('support.tickets', '/api/support/tickets', { headers: { Authorization: `Bearer ${token}` } }, [200], 'GET /support/tickets');
+  await callApi('support.faqs', '/api/support/faqs', { headers: { Authorization: `Bearer ${token}` } }, [200], 'GET /support/faqs');
 
   const installationId = randomUUID();
   await seedRow('seed.installations', 'installations', {
@@ -723,6 +732,24 @@ async function main() {
   );
 
   await callApi('support.admin.tickets', '/api/support/admin/tickets?limit=20&offset=0', { headers: { Authorization: `Bearer ${adminToken}` } }, [200], 'GET /support/admin/tickets');
+  await callApi(
+    'support.admin.ticket.detail',
+    `/api/support/admin/tickets/${createdTicketId}`,
+    { headers: { Authorization: `Bearer ${adminToken}` } },
+    [200],
+    'GET /support/admin/tickets/{ticketId}',
+  );
+  await callApi(
+    'support.admin.ticket.reply',
+    `/api/support/admin/tickets/${createdTicketId}/messages`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Smoke admin reply for support thread validation.' }),
+    },
+    [201],
+    'POST /support/admin/tickets/{ticketId}/messages',
+  );
   await callApi(
     'support.admin.update-ticket',
     `/api/support/admin/tickets/${createdTicketId}`,

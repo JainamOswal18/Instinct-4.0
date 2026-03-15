@@ -4,8 +4,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { energyServices } from '@/lib/mock-data';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { fetchServices } from '@/lib/customer-api';
 import {
   getServiceRequests,
   getProviderNotifications,
@@ -38,6 +38,13 @@ import {
 } from '@/components/ui/dialog';
 import { Info, Bell, CheckCircle, ClipboardCheck, FileText, MapPin, Zap, ArrowRight, X } from 'lucide-react';
 
+type ServiceCatalogItem = {
+  id: string;
+  title: string;
+  description: string;
+  imageId: string;
+};
+
 // ========================================
 // USER DASHBOARD
 // ========================================
@@ -46,6 +53,7 @@ function UserDashboard() {
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [showNotificationDialog, setShowNotificationDialog] = useState(false);
   const [currentNotification, setCurrentNotification] = useState<UserNotification | null>(null);
+  const [services, setServices] = useState<ServiceCatalogItem[]>([]);
 
   const checkNotifications = useCallback(() => {
     const allNotifications = getUserNotifications();
@@ -66,6 +74,14 @@ function UserDashboard() {
     const interval = setInterval(checkNotifications, 2000);
     return () => clearInterval(interval);
   }, [checkNotifications]);
+
+  useEffect(() => {
+    fetchServices()
+      .then((result) => setServices(result.services))
+      .catch(() => {
+        setServices([]);
+      });
+  }, []);
 
   const handleDismissNotification = (id: string) => {
     dismissUserNotification(id);
@@ -148,7 +164,7 @@ function UserDashboard() {
 
       {/* Service cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {energyServices.map((service) => {
+        {services.map((service) => {
           const image = PlaceHolderImages.find(img => img.id === service.imageId);
           return (
             <Card key={service.id} className="overflow-hidden flex flex-col">
