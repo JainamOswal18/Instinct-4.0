@@ -11,7 +11,6 @@ const router = Router();
 const submitSurveySchema = z.object({
   propertyId: z.string().min(1),
   propertyType: z.enum(['residential', 'commercial']),
-  roofArea: z.number().positive(),
   monthlyBill: z.number().positive(),
   monthlyConsumption: z.number().positive(),
   peakHours: z.string().min(1),
@@ -48,7 +47,6 @@ router.post(
         id: randomUUID(),
         property_id: parsed.data.propertyId,
         property_type: parsed.data.propertyType,
-        roof_area: parsed.data.roofArea,
         monthly_bill: parsed.data.monthlyBill,
         monthly_consumption: parsed.data.monthlyConsumption,
         peak_hours: parsed.data.peakHours,

@@ -130,7 +130,6 @@ async function main() {
       body: JSON.stringify({
         propertyId,
         propertyType: 'residential',
-        roofArea: 110,
         monthlyBill: 5200,
         monthlyConsumption: 610,
         peakHours: '18:00-22:00',

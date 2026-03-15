@@ -142,7 +142,7 @@
         "summary": "Submit energy survey",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "example": { "propertyId": "prop_001", "propertyType": "residential", "roofArea": 100, "monthlyBill": 5000, "monthlyConsumption": 350, "peakHours": "6-9 PM", "occupants": 4, "appliances": ["Air Conditioner", "Water Heater"] } } }
+          "content": { "application/json": { "example": { "propertyId": "prop_001", "propertyType": "residential", "monthlyBill": 5000, "monthlyConsumption": 350, "peakHours": "6-9 PM", "occupants": 4, "appliances": ["Air Conditioner", "Water Heater"] } } }
         },
         "responses": { "200": { "description": "Survey submitted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SuccessResponse" } } } } }
       }
