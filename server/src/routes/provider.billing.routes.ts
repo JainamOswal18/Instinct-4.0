@@ -24,7 +24,6 @@ const draftSchema = z.object({
   dueDate: z.string().optional(),
   status: z.enum(['draft', 'sent']).default('sent'),
 });
-
 const updateProviderRequestStatusSchema = z.object({
   status: z.enum(['pending', 'in-progress', 'completed', 'cancelled']),
 });
