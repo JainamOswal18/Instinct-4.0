@@ -33,6 +33,7 @@ export async function apiRequest<T>(
   const message = payload.message || payload.error?.message || 'Request failed';
 
   if (!response.ok || !payload.success) {
+    console.error('API Error:', path, payload);
     return {
       success: false,
       message,

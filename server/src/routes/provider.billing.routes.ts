@@ -60,6 +60,35 @@ router.post(
           .maybeSingle();
         assertNoDbError(requestUserError);
         resolvedPropertyId = requestUser?.current_property_id || null;
+
+        if (!resolvedPropertyId) {
+          const { data: existingProp } = await db
+            .from('properties')
+            .select('id')
+            .eq('user_id', linkedRequest.user_id)
+            .limit(1)
+            .maybeSingle();
+          if (existingProp && existingProp.id) {
+            resolvedPropertyId = existingProp.id;
+          } else {
+            const propertyId = randomUUID();
+            const propNow = new Date().toISOString();
+            const { error: propInsertError } = await db.from('properties').insert({
+              id: propertyId,
+              user_id: linkedRequest.user_id,
+              name: 'My Property',
+              address: 'Address pending',
+              type: 'residential',
+              subscription_status: 'NONE',
+              created_at: propNow,
+              updated_at: propNow,
+            });
+            assertNoDbError(propInsertError);
+            resolvedPropertyId = propertyId;
+          }
+          await db.from('users').update({ current_property_id: resolvedPropertyId }).eq('id', linkedRequest.user_id);
+          await db.from('service_requests').update({ property_id: resolvedPropertyId }).eq('id', parsed.data.surveyId);
+        }
       }
     }
 
@@ -104,7 +133,18 @@ router.post(
         due_date: dueDate,
         generated_at: now,
       });
-      assertNoDbError(billInsertError);
+      if (billInsertError) {
+        console.error('[billing/drafts] bills insert error:', JSON.stringify(billInsertError));
+        assertNoDbError(billInsertError);
+      }
+    }
+
+    let validSurveyId = null;
+    if (parsed.data.surveyId) {
+      const { data: surveyData } = await db.from('surveys').select('id').eq('id', parsed.data.surveyId).maybeSingle();
+      if (surveyData && surveyData.id) {
+        validSurveyId = surveyData.id;
+      }
     }
 
     const draftId = randomUUID();
@@ -112,7 +152,7 @@ router.post(
       id: draftId,
       provider_user_id: authUser.userId,
       property_id: resolvedPropertyId,
-      survey_id: parsed.data.surveyId || null,
+      survey_id: validSurveyId,
       bill_id: billId,
       title: parsed.data.title,
       description: parsed.data.description || null,
@@ -124,7 +164,10 @@ router.post(
       created_at: now,
       updated_at: now,
     });
-    assertNoDbError(draftInsertError);
+    if (draftInsertError) {
+      console.error('[billing/drafts] provider_billing_drafts insert error:', JSON.stringify(draftInsertError));
+      assertNoDbError(draftInsertError);
+    }
 
     if (parsed.data.status === 'sent') {
       const { error: notificationError } = await db.from('notifications').insert({
@@ -139,7 +182,11 @@ router.post(
         persistent: false,
         created_at: now,
       });
-      assertNoDbError(notificationError);
+      if (notificationError) {
+        console.error('[billing/drafts] notifications insert error:', JSON.stringify(notificationError));
+        // Don't fail the whole request just because the notification failed
+        // assertNoDbError(notificationError);
+      }
     }
 
     sendSuccess(res, {

@@ -112,10 +112,10 @@ app.use((_req, res) => {
 
 // ── Global error handler ──────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err.stack);
+  console.error('[GLOBAL ERROR]', err.message, err.stack);
   res.status(500).json({
     success: false,
-    error: { code: 'INTERNAL_ERROR', message: 'Something went wrong. Please try again later.' },
+    error: { code: 'INTERNAL_ERROR', message: err.message || 'Something went wrong. Please try again later.' },
   });
 });
 
