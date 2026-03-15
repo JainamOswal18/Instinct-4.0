@@ -266,6 +266,26 @@ async function main() {
   const proposalId = proposal.body?.data?.proposalId;
   assertCondition(Boolean(proposalId), 'proposalId missing');
 
+  const propertiesAfterProposal = await callApi(
+    'user.properties.after-proposal',
+    '/api/user/properties',
+    { headers: { Authorization: `Bearer ${token}` } },
+    [200],
+  );
+  const targetProperty = (propertiesAfterProposal.body?.data?.properties || []).find((item) => item.id === propertyId);
+  record(
+    'subscription.status.plan-proposed',
+    targetProperty?.subscriptionStatus === 'PLAN_PROPOSED',
+    `status=${targetProperty?.subscriptionStatus || 'missing'}`,
+  );
+  assertCondition(targetProperty?.subscriptionStatus === 'PLAN_PROPOSED', 'Property subscriptionStatus was not updated to PLAN_PROPOSED');
+  record(
+    'subscription.solar-capacity.numeric',
+    typeof targetProperty?.solarCapacity === 'number' && !Number.isNaN(targetProperty?.solarCapacity),
+    `solarCapacity=${String(targetProperty?.solarCapacity)}`,
+  );
+  assertCondition(typeof targetProperty?.solarCapacity === 'number' && !Number.isNaN(targetProperty?.solarCapacity), 'Property solarCapacity is not numeric after proposal generation');
+
   await callApi(
     'subscription.proposal.get',
     `/api/subscription/proposal/${proposalId}`,
