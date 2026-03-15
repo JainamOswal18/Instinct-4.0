@@ -24,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import StatsCards from '@/components/dashboard/stats-cards';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { getSession } from '@/lib/auth';
 import { fetchAdminOverview } from '@/lib/admin-api';
@@ -518,8 +517,12 @@ function AdminDashboard() {
     openTickets: number;
     totalRevenue: number;
   } | null>(null);
+  const [isLoadingOverview, setIsLoadingOverview] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
 
   useEffect(() => {
+    setIsLoadingOverview(true);
+    setOverviewError(null);
     fetchAdminOverview()
       .then((data) => {
         setOverview({
@@ -529,14 +532,40 @@ function AdminDashboard() {
           totalRevenue: data.totalRevenue,
         });
       })
-      .catch(() => {
+      .catch((error) => {
         setOverview(null);
+        setOverviewError(error instanceof Error ? error.message : 'Failed to load overview');
+      })
+      .finally(() => {
+        setIsLoadingOverview(false);
       });
   }, []);
 
+  const formatINR = (amount: number) => {
+    const value = Number(amount);
+    if (!Number.isFinite(value)) return '₹0.00';
+    return `₹${new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)}`;
+  };
+
   return (
     <div className="space-y-6">
-      {overview ? (
+      {isLoadingOverview ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((item) => (
+            <Card key={item}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Loading...</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 w-24 animate-pulse rounded bg-muted" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : overview ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Total Users</CardTitle></CardHeader>
@@ -552,11 +581,14 @@ function AdminDashboard() {
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Revenue</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">₹{overview.totalRevenue.toFixed(2)}</div></CardContent>
+            <CardContent><div className="text-2xl font-bold">{formatINR(overview.totalRevenue)}</div></CardContent>
           </Card>
         </div>
       ) : (
-        <StatsCards />
+        <Alert variant="destructive">
+          <AlertTitle>Unable to load admin overview</AlertTitle>
+          <AlertDescription>{overviewError || 'Please try again in a moment.'}</AlertDescription>
+        </Alert>
       )}
       <Card>
         <CardHeader>

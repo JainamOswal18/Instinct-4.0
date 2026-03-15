@@ -1,11 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { mockStats } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
-import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, CircleDollarSign, Wind } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, IndianRupee, Wind } from 'lucide-react';
 
 const iconMap: { [key: string]: React.ElementType } = {
   'Current Usage': Zap,
-  'Est. Monthly Bill': CircleDollarSign,
+  'Est. Monthly Bill': IndianRupee,
   'CO2 Saved This Month': Wind,
   'Grid Status': TrendingUp,
 };

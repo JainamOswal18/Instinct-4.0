@@ -11,12 +11,14 @@ import { adjustAdminBill, fetchAdminBills } from '@/lib/admin-api';
 import { API_BASE_URL } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth';
 
-const formatINR = (amount: number) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+const formatINR = (amount: number) => {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return '₹0.00';
+  return `₹${new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(value)}`;
+};
 
 type AdminBill = {
   billId: string;

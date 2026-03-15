@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getSurveyResults, type SurveyResult } from '@/lib/notifications';
 import {
-  Download, CheckCircle, Zap, DollarSign, Wrench,
+  Download, CheckCircle, Zap, Wrench,
   ArrowRight, Sparkles, ShieldCheck, Clock, Cpu,
   IndianRupee, TrendingDown, CalendarClock, Loader2,
   AlertCircle, RefreshCw
@@ -306,7 +306,7 @@ function AiBillingSection({ surveyResult }: { surveyResult: SurveyResult }) {
               <Separator />
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <IndianRupee className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">Monthly Service</span>
                 </div>
                 <span className="font-semibold">{formatINR(plan.monthlyServiceCharge)}/mo</span>

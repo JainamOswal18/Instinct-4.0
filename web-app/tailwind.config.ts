@@ -17,7 +17,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        body: ['PT Sans', 'Noto Sans', 'sans-serif'],
+        body: ['Noto Sans', 'PT Sans', 'sans-serif'],
         headline: ['Space Grotesk', 'Noto Sans', 'sans-serif'],
       },
       colors: {

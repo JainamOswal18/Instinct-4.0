@@ -5,12 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { fetchAdminOverview } from '@/lib/admin-api';
 
-const formatINR = (amount: number) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+const formatINR = (amount: number) => {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return '₹0.00';
+  return `₹${new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(value)}`;
+};
 
 export default function AnalyticsPage() {
   const { toast } = useToast();
