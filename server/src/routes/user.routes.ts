@@ -18,8 +18,14 @@ const profileSchema = z.object({
 
 const propertySchema = z.object({
   name: z.string().min(1),
-  address: z.string().min(3),
+  address: z.string().min(3).optional(),
   type: z.enum(['residential', 'commercial']),
+});
+
+const propertyUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  address: z.string().min(3).optional(),
+  type: z.enum(['residential', 'commercial']).optional(),
 });
 
 const userStatusSchema = z.object({
@@ -121,7 +127,7 @@ router.post(
         id: randomUUID(),
         user_id: authReq.user!.userId,
         name: parsed.data.name,
-        address: parsed.data.address,
+        address: parsed.data.address ?? 'Address not provided',
         type: parsed.data.type,
       })
       .select('id,user_id,name,address,type,subscription_status,plan_type,solar_capacity,battery_storage,installation_date,created_at')
@@ -149,6 +155,78 @@ router.post(
       undefined,
       201,
     );
+  }),
+);
+
+router.patch(
+  '/properties/:id',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const parsed = propertyUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid request parameters', parsed.error.flatten().fieldErrors);
+      return;
+    }
+
+    if (
+      parsed.data.name === undefined &&
+      parsed.data.address === undefined &&
+      parsed.data.type === undefined
+    ) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'At least one field must be provided');
+      return;
+    }
+
+    const authReq = req as AuthRequest;
+    const propertyId = String(req.params.id);
+    const db = getEaasClient();
+
+    const { data: currentProperty, error: currentPropertyError } = await db
+      .from('properties')
+      .select('id,user_id,name,address,type,subscription_status,plan_type,solar_capacity,battery_storage,installation_date,created_at')
+      .eq('id', propertyId)
+      .maybeSingle();
+    assertNoDbError(currentPropertyError);
+
+    if (!currentProperty || (currentProperty as any).user_id !== authReq.user!.userId) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    const updatePayload: { name?: string; address?: string; type?: 'residential' | 'commercial' } = {};
+    if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+    if (parsed.data.address !== undefined) updatePayload.address = parsed.data.address;
+    if (parsed.data.type !== undefined) updatePayload.type = parsed.data.type;
+
+    const { data: updatedProperty, error: updateError } = await db
+      .from('properties')
+      .update(updatePayload)
+      .eq('id', propertyId)
+      .eq('user_id', authReq.user!.userId)
+      .select('id,user_id,name,address,type,subscription_status,plan_type,solar_capacity,battery_storage,installation_date,created_at')
+      .maybeSingle();
+    assertNoDbError(updateError);
+
+    if (!updatedProperty) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    const mappedProperty = mapProperty(updatedProperty as PropertyRow);
+    sendSuccess(res, {
+      property: {
+        id: mappedProperty.id,
+        name: mappedProperty.name,
+        address: mappedProperty.address,
+        type: mappedProperty.type,
+        subscriptionStatus: mappedProperty.subscriptionStatus,
+        planType: mappedProperty.planType,
+        solarCapacity: mappedProperty.solarCapacity,
+        batteryStorage: mappedProperty.batteryStorage,
+        installationDate: mappedProperty.installationDate,
+        createdAt: mappedProperty.createdAt,
+      },
+    }, 'Property updated successfully');
   }),
 );
 

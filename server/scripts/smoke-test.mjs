@@ -218,6 +218,18 @@ async function main() {
 
   await callApi('user.properties.get', '/api/user/properties', { headers: { Authorization: `Bearer ${token}` } }, [200], 'GET /user/properties');
 
+  await callApi(
+    'user.properties.patch',
+    `/api/user/properties/${propertyId}`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Smoke Property Updated', type: 'residential' }),
+    },
+    [200],
+    'PATCH /user/properties/{id}',
+  );
+
   const survey = await callApi(
     'survey.submit',
     '/api/survey/submit',

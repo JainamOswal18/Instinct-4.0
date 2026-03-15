@@ -1049,6 +1049,42 @@
         }
       }
     },
+    "/user/properties/{id}": {
+      "patch": {
+        "tags": ["User"],
+        "summary": "Update existing property",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "Updated Home",
+                "address": "New Address",
+                "type": "residential"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Property updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/admin/users": {
       "get": {
         "tags": ["User"],
