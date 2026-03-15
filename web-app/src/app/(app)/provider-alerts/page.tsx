@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import {
-  getProviderAlerts,
-  dismissAlert,
-  dismissAllAlerts,
-  seedProviderMockData,
+  fetchProviderAlerts,
+  dismissProviderAlert,
+  dismissAllProviderAlerts,
   type ProviderAlert,
   type ProviderAlertSeverity,
   type ProviderAlertType,
-} from '@/lib/provider-data';
+} from '@/lib/provider-api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,25 +48,52 @@ export default function ProviderAlertsPage() {
   const [alerts, setAlerts] = useState<ProviderAlert[]>([]);
   const [activeTab, setActiveTab] = useState('all');
 
-  const loadData = () => {
-    seedProviderMockData();
-    setAlerts(getProviderAlerts());
+  const loadData = async () => {
+    try {
+      const [active, dismissed] = await Promise.all([
+        fetchProviderAlerts({ dismissed: false }),
+        fetchProviderAlerts({ dismissed: true }),
+      ]);
+      setAlerts([...active.alerts, ...dismissed.alerts]);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load alerts',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   useEffect(() => {
-    loadData();
+    loadData().catch(() => undefined);
   }, []);
 
-  const handleDismiss = (id: string) => {
-    dismissAlert(id);
-    loadData();
-    toast({ title: 'Alert Dismissed' });
+  const handleDismiss = async (id: string) => {
+    try {
+      await dismissProviderAlert(id);
+      await loadData();
+      toast({ title: 'Alert Dismissed' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to dismiss alert',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
-  const handleDismissAll = (severity?: ProviderAlertSeverity) => {
-    dismissAllAlerts(severity);
-    loadData();
-    toast({ title: 'Alerts Dismissed', description: severity ? `All ${severity} alerts dismissed.` : 'All alerts dismissed.' });
+  const handleDismissAll = async (severity?: ProviderAlertSeverity) => {
+    try {
+      await dismissAllProviderAlerts(severity);
+      await loadData();
+      toast({ title: 'Alerts Dismissed', description: severity ? `All ${severity} alerts dismissed.` : 'All alerts dismissed.' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to dismiss alerts',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   const undismissed = alerts.filter((a) => !a.dismissed);

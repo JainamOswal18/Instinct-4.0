@@ -36,7 +36,7 @@ function normalizeRole(role: unknown): AppRole {
   return role === 'ADMIN' || role === 'EXECUTIVE' || role === 'CITIZEN' ? role : 'CITIZEN';
 }
 
-function persistSession(payload: AuthApiPayload): void {
+function persistSession(payload: AuthApiPayload, preferredRole?: AppRole): void {
   if (typeof window === 'undefined') return;
 
   const session: AuthSession = {
@@ -44,7 +44,7 @@ function persistSession(payload: AuthApiPayload): void {
     email: payload.user.email,
     name: payload.user.name,
     phone: payload.user.phone ?? null,
-    role: normalizeRole(payload.user.role),
+    role: normalizeRole(preferredRole ?? payload.user.role),
     accessToken: payload.accessToken,
   };
 
@@ -67,7 +67,7 @@ export async function registerUser(user: User): Promise<{ success: boolean; mess
     return { success: false, message: result.message || 'Registration failed' };
   }
 
-  persistSession(result.data);
+  persistSession(result.data, user.role);
   return { success: true, message: result.message || 'Account created successfully' };
 }
 
@@ -91,7 +91,20 @@ export function getSession(): AuthSession | null {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as AuthSession;
+    const parsed = JSON.parse(raw) as Partial<AuthSession>;
+    if (!parsed.id || !parsed.email || !parsed.name || !parsed.accessToken) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+
+    return {
+      id: parsed.id,
+      email: parsed.email,
+      name: parsed.name,
+      phone: parsed.phone ?? null,
+      role: normalizeRole(parsed.role),
+      accessToken: parsed.accessToken,
+    };
   } catch {
     localStorage.removeItem(SESSION_KEY);
     return null;

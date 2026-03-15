@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import {
-  getTickets,
-  getTicketStats,
-  updateTicketStatus,
-  seedProviderMockData,
-  type SupportTicket,
-  type TicketStatus,
-  type TicketApprovalAction,
-} from '@/lib/provider-data';
+  approveProviderTicket,
+  fetchProviderTickets,
+  resolveProviderTicket,
+  updateProviderTicket,
+  type ProviderTicketApprovalAction,
+  type ProviderTicketStatus,
+} from '@/lib/provider-api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +47,25 @@ const priorityConfig: Record<string, { label: string; color: string }> = {
   low: { label: 'Low', color: 'text-green-500 bg-green-500/10 border-green-500/30' },
 };
 
+type SupportTicket = {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  category: string;
+  priority: 'high' | 'medium' | 'low';
+  subject: string;
+  description: string;
+  status: ProviderTicketStatus;
+  providerNotes?: string;
+  approvalAction?: ProviderTicketApprovalAction;
+  createdAt: string;
+  updatedAt: string;
+  slaDeadline: string;
+};
+
+type TicketStatus = ProviderTicketStatus;
+type TicketApprovalAction = ProviderTicketApprovalAction;
+
 export default function ProviderTicketsPage() {
   const { toast } = useToast();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -58,48 +76,80 @@ export default function ProviderTicketsPage() {
   const [approvalAction, setApprovalAction] = useState<TicketApprovalAction>('none');
   const [providerNotes, setProviderNotes] = useState('');
 
-  const loadData = () => {
-    seedProviderMockData();
-    setTickets(getTickets());
-    setStats(getTicketStats());
+  const loadData = async () => {
+    try {
+      const result = await fetchProviderTickets();
+      setTickets(result.tickets as SupportTicket[]);
+      setStats(result.stats);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load provider tickets',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   useEffect(() => {
-    loadData();
+    loadData().catch(() => undefined);
   }, []);
 
-  const handleStatusChange = (ticket: SupportTicket, newStatus: TicketStatus) => {
+  const handleStatusChange = async (ticket: SupportTicket, newStatus: TicketStatus) => {
     if (newStatus === 'resolved') {
       setSelectedTicket(ticket);
       setShowApprovalDialog(true);
       return;
     }
-    updateTicketStatus(ticket.id, newStatus);
-    loadData();
-    toast({ title: 'Ticket Updated', description: `Status changed to ${statusConfig[newStatus].label}.` });
+    try {
+      await updateProviderTicket(ticket.id, { status: newStatus });
+      await loadData();
+      toast({ title: 'Ticket Updated', description: `Status changed to ${statusConfig[newStatus].label}.` });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update ticket',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
-  const handleApproval = () => {
+  const handleApproval = async () => {
     if (!selectedTicket) return;
-    updateTicketStatus(selectedTicket.id, 'resolved', {
-      approvalAction,
-      providerNotes,
-    });
-    loadData();
-    setShowApprovalDialog(false);
-    setSelectedTicket(null);
-    setApprovalAction('none');
-    setProviderNotes('');
-    toast({ title: 'Ticket Resolved', description: 'The ticket has been resolved and the customer will be notified.' });
+    try {
+      await resolveProviderTicket(selectedTicket.id, {
+        approvalAction,
+        providerNotes,
+      });
+      await loadData();
+      setShowApprovalDialog(false);
+      setSelectedTicket(null);
+      setApprovalAction('none');
+      setProviderNotes('');
+      toast({ title: 'Ticket Resolved', description: 'The ticket has been resolved and the customer will be notified.' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to resolve ticket',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
-  const handleApproveAction = (ticket: SupportTicket, action: TicketApprovalAction) => {
-    updateTicketStatus(ticket.id, 'in-progress', {
-      approvalAction: action,
-      providerNotes: `Approved: ${action.replace('-', ' ')}`,
-    });
-    loadData();
-    toast({ title: 'Action Approved', description: `Approved: ${action.replace('-', ' ')}` });
+  const handleApproveAction = async (ticket: SupportTicket, action: TicketApprovalAction) => {
+    try {
+      await approveProviderTicket(ticket.id, {
+        approvalAction: action,
+        providerNotes: `Approved: ${action.replace('-', ' ')}`,
+      });
+      await loadData();
+      toast({ title: 'Action Approved', description: `Approved: ${action.replace('-', ' ')}` });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to approve action',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   const getSlaStatus = (ticket: SupportTicket) => {

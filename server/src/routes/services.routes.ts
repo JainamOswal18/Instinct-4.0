@@ -83,11 +83,20 @@ router.post(
       return;
     }
 
+    const { data: user, error: userError } = await db
+      .from('users')
+      .select('id,name,current_property_id')
+      .eq('id', authReq.user!.userId)
+      .maybeSingle();
+    assertNoDbError(userError);
+
+    const resolvedPropertyId = parsed.data.propertyId || user?.current_property_id || null;
+
     const requestId = randomUUID();
     const { error: requestError } = await db.from('service_requests').insert({
       id: requestId,
       user_id: authReq.user!.userId,
-      property_id: parsed.data.propertyId || null,
+      property_id: resolvedPropertyId,
       service_id: parsed.data.serviceId,
       service_title: service.title,
       consumption_kwh: parsed.data.consumption || null,
@@ -109,6 +118,18 @@ router.post(
       const { error: filesError } = await db.from('service_request_files').insert(payload);
       assertNoDbError(filesError);
     }
+
+    const { error: alertError } = await db.from('provider_alerts').insert({
+      id: randomUUID(),
+      type: 'service_request',
+      severity: 'info',
+      title: `New proposal from ${user?.name || 'Customer'}`,
+      message: `${user?.name || 'A customer'} submitted a ${service.title} request for provider review.`,
+      related_id: requestId,
+      dismissed: false,
+      created_at: new Date().toISOString(),
+    });
+    assertNoDbError(alertError);
 
     sendSuccess(
       res,
@@ -197,7 +218,7 @@ router.get(
 router.patch(
   '/requests/admin/:requestId',
   authenticate,
-  requireRole(Role.ADMIN),
+  requireRole(Role.ADMIN, Role.EXECUTIVE),
   asyncHandler(async (req, res) => {
     const parsed = updateRequestStatusSchema.safeParse(req.body);
     if (!parsed.success) {

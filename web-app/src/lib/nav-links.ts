@@ -42,7 +42,7 @@ export const providerNavLinks: NavLink[] = [
   { href: '/provider-tickets', label: 'Tickets', icon: Ticket },
   { href: '/provider-alerts', label: 'Alerts', icon: Bell },
   { href: '/grid-status', label: 'Grid Status', icon: Zap },
-  { href: '/support', label: 'Support', icon: LifeBuoy },
+  { href: '/provider-tickets', label: 'Support', icon: LifeBuoy },
 ];
 
 export const adminNavLinks: NavLink[] = [

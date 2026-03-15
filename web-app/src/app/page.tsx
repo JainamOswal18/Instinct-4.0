@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { loginUser, registerUser, isAuthenticated, type AppRole } from '@/lib/auth';
+import { loginUser, registerUser, type AppRole } from '@/lib/auth';
 import { Mail, Lock, User, Phone, ArrowRight, Sparkles } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup';
@@ -38,13 +38,6 @@ export default function AuthPage() {
   const [signupPassword, setSignupPassword] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
-
-  // If already authenticated, redirect to dashboard
-  useEffect(() => {
-    if (isAuthenticated()) {
-      router.push('/dashboard');
-    }
-  }, [router]);
 
   const handleLogin = async () => {
     if (!loginEmail || !loginPassword) {

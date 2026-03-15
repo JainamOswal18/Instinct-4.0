@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import {
-  getEquipmentList,
-  updateEquipmentStatus,
-  updateEquipmentMaintenance,
-  seedProviderMockData,
-  type Equipment,
-  type EquipmentStatus,
-} from '@/lib/provider-data';
+  fetchProviderEquipment,
+  scheduleProviderEquipmentMaintenance,
+  updateProviderEquipmentStatus,
+  type ProviderEquipmentStatus,
+} from '@/lib/provider-api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +32,22 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Cpu, Wifi, WifiOff, AlertTriangle, ShieldCheck, Wrench, Calendar } from 'lucide-react';
 
+type EquipmentStatus = ProviderEquipmentStatus;
+type Equipment = {
+  id: string;
+  installationId: string;
+  name: string;
+  model: string;
+  serialNumber: string;
+  status: EquipmentStatus;
+  healthScore: number;
+  installedDate: string;
+  warrantyExpiry: string;
+  lastMaintenanceDate?: string;
+  nextMaintenanceDate?: string;
+  customerName: string;
+};
+
 const statusConfig: Record<EquipmentStatus, { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary'; icon: typeof Wifi }> = {
   online: { label: 'Online', variant: 'default', icon: Wifi },
   offline: { label: 'Offline', variant: 'destructive', icon: WifiOff },
@@ -48,13 +62,21 @@ export default function EquipmentPage() {
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [maintenanceDate, setMaintenanceDate] = useState('');
 
-  const loadData = () => {
-    seedProviderMockData();
-    setEquipment(getEquipmentList());
+  const loadData = async () => {
+    try {
+      const result = await fetchProviderEquipment();
+      setEquipment(result.equipment as Equipment[]);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load equipment',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   useEffect(() => {
-    loadData();
+    loadData().catch(() => undefined);
   }, []);
 
   const onlineCount = equipment.filter((e) => e.status === 'online').length;
@@ -64,21 +86,37 @@ export default function EquipmentPage() {
     ? Math.round(equipment.reduce((sum, e) => sum + e.healthScore, 0) / equipment.length)
     : 0;
 
-  const handleStatusChange = (id: string, newStatus: EquipmentStatus) => {
+  const handleStatusChange = async (id: string, newStatus: EquipmentStatus) => {
     const healthScore = newStatus === 'online' ? 95 : newStatus === 'offline' ? 0 : 60;
-    updateEquipmentStatus(id, newStatus, healthScore);
-    loadData();
-    toast({ title: 'Status Updated', description: `Equipment status changed to ${statusConfig[newStatus].label}.` });
+    try {
+      await updateProviderEquipmentStatus(id, newStatus, healthScore);
+      await loadData();
+      toast({ title: 'Status Updated', description: `Equipment status changed to ${statusConfig[newStatus].label}.` });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update equipment status',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
-  const handleScheduleMaintenance = () => {
+  const handleScheduleMaintenance = async () => {
     if (!selectedEquipment || !maintenanceDate) return;
-    updateEquipmentMaintenance(selectedEquipment.id, maintenanceDate);
-    loadData();
-    setShowMaintenanceDialog(false);
-    setSelectedEquipment(null);
-    setMaintenanceDate('');
-    toast({ title: 'Maintenance Scheduled', description: `Next maintenance set for ${maintenanceDate}.` });
+    try {
+      await scheduleProviderEquipmentMaintenance(selectedEquipment.id, maintenanceDate);
+      await loadData();
+      setShowMaintenanceDialog(false);
+      setSelectedEquipment(null);
+      setMaintenanceDate('');
+      toast({ title: 'Maintenance Scheduled', description: `Next maintenance set for ${maintenanceDate}.` });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to schedule maintenance',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   const isWarrantyValid = (expiry: string) => new Date(expiry) > new Date();

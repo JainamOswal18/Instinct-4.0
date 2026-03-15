@@ -25,6 +25,10 @@ const draftSchema = z.object({
   status: z.enum(['draft', 'sent']).default('sent'),
 });
 
+const updateProviderRequestStatusSchema = z.object({
+  status: z.enum(['pending', 'in-progress', 'completed', 'cancelled']),
+});
+
 router.use(authenticate, roleMiddleware(Role.EXECUTIVE));
 
 router.post(
@@ -168,71 +172,127 @@ router.get(
   '/requests',
   asyncHandler(async (_req, res) => {
     const db = getEaasClient();
-    const { data: surveys, error } = await db
-      .from('surveys')
-      .select('id,property_id,submitted_at,status,monthly_consumption,monthly_bill')
+    const { data: serviceRequests, error } = await db
+      .from('service_requests')
+      .select('id,user_id,property_id,service_title,status,submitted_at,consumption_kwh')
+      .in('status', ['pending', 'in-progress'])
       .order('submitted_at', { ascending: false })
       .limit(200);
     assertNoDbError(error);
 
-    const surveyRows = surveys || [];
-    const surveyIds = surveyRows.map((item: any) => item.id);
-    const propertyIds = surveyRows.map((item: any) => item.property_id);
+    const requestRows = serviceRequests || [];
+    const requestIds = requestRows.map((item: any) => item.id);
+    const propertyIds = requestRows.map((item: any) => item.property_id).filter(Boolean);
+    const userIds = [...new Set(requestRows.map((item: any) => item.user_id).filter(Boolean))];
 
-    const [{ data: drafts, error: draftsError }, { data: properties, error: propertiesError }] = await Promise.all([
-      surveyIds.length
+    const [{ data: drafts, error: draftsError }, { data: properties, error: propertiesError }, { data: users, error: usersError }] = await Promise.all([
+      requestIds.length
         ? db
             .from('provider_billing_drafts')
             .select('id,survey_id,status,created_at')
-            .in('survey_id', surveyIds)
+            .in('survey_id', requestIds)
         : Promise.resolve({ data: [], error: null }),
       propertyIds.length
         ? db.from('properties').select('id,user_id,plan_type').in('id', propertyIds)
+        : Promise.resolve({ data: [], error: null }),
+      userIds.length
+        ? db.from('users').select('id,name').in('id', userIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
     assertNoDbError(draftsError as any);
     assertNoDbError(propertiesError as any);
+    assertNoDbError(usersError as any);
 
-    const draftBySurvey = new Map<string, any>();
+    const draftByRequest = new Map<string, any>();
     for (const draft of drafts || []) {
-      const existing = draftBySurvey.get(draft.survey_id);
+      const existing = draftByRequest.get(draft.survey_id);
       if (!existing || new Date(existing.created_at).getTime() < new Date(draft.created_at).getTime()) {
-        draftBySurvey.set(draft.survey_id, draft);
+        draftByRequest.set(draft.survey_id, draft);
       }
     }
 
     const propertyMap = new Map<string, any>();
     for (const property of properties || []) propertyMap.set(property.id, property);
 
-    const userIds = [...new Set((properties || []).map((item: any) => item.user_id))];
-    const { data: users, error: usersError } = userIds.length
-      ? await db.from('users').select('id,name').in('id', userIds)
-      : { data: [], error: null };
-    assertNoDbError(usersError as any);
     const userMap = new Map<string, any>();
     for (const user of users || []) userMap.set(user.id, user);
 
-    const requests = surveyRows
-      .map((survey: any) => {
-        const property = propertyMap.get(survey.property_id);
-        const user = property ? userMap.get(property.user_id) : null;
-        const draft = draftBySurvey.get(survey.id);
+    const requests = requestRows
+      .map((request: any) => {
+        const property = request.property_id ? propertyMap.get(request.property_id) : null;
+        const user = userMap.get(request.user_id);
+        const draft = draftByRequest.get(request.id);
         return {
-          id: survey.id,
-          propertyId: survey.property_id,
+          id: request.id,
+          propertyId: request.property_id || '',
           customerName: user?.name || 'Unknown',
-          serviceTitle: property?.plan_type || 'Energy Service',
-          status: draft ? `billing_${draft.status}` : 'pending',
-          date: String(survey.submitted_at).slice(0, 10),
-          monthlyConsumption: survey.monthly_consumption,
-          monthlyBill: survey.monthly_bill,
+          serviceTitle: request.service_title || property?.plan_type || 'Energy Service',
+          status: request.status,
+          date: String(request.submitted_at).slice(0, 10),
+          monthlyConsumption: Number(request.consumption_kwh || 0),
+          monthlyBill: 0,
           draftId: draft?.id || null,
         };
-      })
-      .filter((item) => item.status === 'pending');
+      });
 
     sendSuccess(res, { requests });
+  }),
+);
+
+router.patch(
+  '/requests/:requestId/status',
+  asyncHandler(async (req, res) => {
+    const parsed = updateProviderRequestStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'Invalid request parameters', parsed.error.flatten().fieldErrors);
+      return;
+    }
+
+    const requestId = String(req.params.requestId);
+    const db = getEaasClient();
+    const now = new Date().toISOString();
+
+    const { data: serviceRequest, error: serviceRequestError } = await db
+      .from('service_requests')
+      .update({
+        status: parsed.data.status,
+        updated_at: now,
+      })
+      .eq('id', requestId)
+      .select('id,status')
+      .maybeSingle();
+    assertNoDbError(serviceRequestError);
+
+    if (serviceRequest) {
+      sendSuccess(res, {
+        requestId: serviceRequest.id,
+        status: serviceRequest.status,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    const { data: survey, error } = await db
+      .from('surveys')
+      .update({
+        status: parsed.data.status,
+      })
+      .eq('id', requestId)
+      .select('id,status')
+      .maybeSingle();
+    assertNoDbError(error);
+
+    if (!survey) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    sendSuccess(res, {
+      requestId: survey.id,
+      status: survey.status,
+      updatedAt: now,
+    });
   }),
 );
 

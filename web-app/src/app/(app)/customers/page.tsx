@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import {
-  getCustomerConsumptionData,
-  getCustomerPayments,
-  getRevenueOverview,
-  seedProviderMockData,
-  type CustomerConsumption,
-  type CustomerPayment,
-} from '@/lib/provider-data';
+  fetchProviderConsumptionAggregate,
+  fetchProviderCustomers,
+  fetchProviderPayments,
+  fetchProviderRevenueOverview,
+} from '@/lib/provider-api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,23 +14,99 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, Zap, IndianRupee, AlertTriangle, TrendingUp, ArrowUpRight } from 'lucide-react';
 
+type CustomerConsumption = {
+  customerName: string;
+  propertyId: string;
+  serviceTitle: string;
+  planName: string;
+  planThreshold: number;
+  monthlyConsumption: number;
+  paymentStatus: 'paid' | 'pending' | 'overdue';
+  lastPaymentDate: string;
+};
+
+type CustomerPayment = {
+  id: string;
+  customerName: string;
+  serviceTitle: string;
+  planName: string;
+  monthlyAmount: number;
+  status: 'paid' | 'pending' | 'overdue';
+  dueDate: string;
+  paidDate: string;
+  month: string;
+};
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerConsumption[]>([]);
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const [revenue, setRevenue] = useState({ totalMRR: 0, totalPaid: 0, totalOutstanding: 0, overdueCount: 0, paidCount: 0, collectionRate: 0 });
+  const [totals, setTotals] = useState({ totalKwhServed: 0, customersExceedingThreshold: 0 });
 
   useEffect(() => {
-    seedProviderMockData();
-    setCustomers(getCustomerConsumptionData());
-    setPayments(getCustomerPayments());
-    setRevenue(getRevenueOverview());
+    const loadData = async () => {
+      try {
+        const [customerData, paymentData, revenueData, aggregate] = await Promise.all([
+          fetchProviderCustomers(),
+          fetchProviderPayments(),
+          fetchProviderRevenueOverview(),
+          fetchProviderConsumptionAggregate(),
+        ]);
+
+        setCustomers(
+          customerData.customers.map((item) => ({
+            customerName: item.name,
+            propertyId: item.propertyId,
+            serviceTitle: item.serviceTitle,
+            planName: item.planName,
+            planThreshold: item.planThreshold,
+            monthlyConsumption: item.monthlyConsumption,
+            paymentStatus: item.paymentStatus,
+            lastPaymentDate: item.lastPaymentDate || '',
+          })),
+        );
+
+        setPayments(
+          paymentData.payments.map((item) => ({
+            id: item.billId,
+            customerName: item.customerName,
+            serviceTitle: 'Energy Service',
+            planName: 'Active Plan',
+            monthlyAmount: item.amount,
+            status: item.status,
+            dueDate: item.dueDate,
+            paidDate: item.paidDate || '',
+            month: item.month,
+          })),
+        );
+
+        setRevenue({
+          totalMRR: revenueData.totalMRR,
+          totalPaid: revenueData.paidThisMonth,
+          totalOutstanding: revenueData.totalOutstanding,
+          overdueCount: revenueData.overdueCount,
+          paidCount: paymentData.payments.filter((item) => item.status === 'paid').length,
+          collectionRate: revenueData.collectionRate,
+        });
+
+        setTotals({
+          totalKwhServed: aggregate.totalKwhServed,
+          customersExceedingThreshold: aggregate.customersExceedingThreshold,
+        });
+      } catch {
+        setCustomers([]);
+        setPayments([]);
+      }
+    };
+
+    loadData().catch(() => undefined);
   }, []);
 
   const formatINR = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
-  const totalKwh = customers.reduce((sum, c) => sum + c.monthlyConsumption, 0);
-  const exceedingThreshold = customers.filter((c) => c.monthlyConsumption > c.planThreshold).length;
+  const totalKwh = totals.totalKwhServed;
+  const exceedingThreshold = totals.customersExceedingThreshold;
 
   const paymentBadge = (status: string) => {
     switch (status) {
@@ -143,31 +217,8 @@ export default function CustomersPage() {
                         {paymentBadge(cust.paymentStatus)}
                       </div>
 
-                      {/* Mini hourly chart (sparkline-style) */}
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-muted-foreground mb-2">24h Consumption Pattern</p>
-                        <div className="flex items-end gap-[2px] h-12">
-                          {cust.hourlyData.map((h, i) => {
-                            const maxVal = Math.max(...cust.hourlyData.map((d) => d.consumption));
-                            const heightPercent = maxVal > 0 ? (h.consumption / maxVal) * 100 : 0;
-                            const isPeak = h.consumption > maxVal * 0.75;
-                            return (
-                              <div
-                                key={i}
-                                className={`flex-1 rounded-sm transition-all ${isPeak ? 'bg-amber-500' : 'bg-primary/40'}`}
-                                style={{ height: `${heightPercent}%` }}
-                                title={`${h.time}: ${h.consumption} kWh`}
-                              />
-                            );
-                          })}
-                        </div>
-                        <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
-                          <span>00:00</span>
-                          <span>06:00</span>
-                          <span>12:00</span>
-                          <span>18:00</span>
-                          <span>23:00</span>
-                        </div>
+                      <div className="pt-2 border-t text-xs text-muted-foreground">
+                        Last payment: {cust.lastPaymentDate || 'N/A'}
                       </div>
                     </CardContent>
                   </Card>

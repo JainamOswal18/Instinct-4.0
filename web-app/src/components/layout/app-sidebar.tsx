@@ -50,8 +50,10 @@ function SidebarContent() {
     const storedRole = currentSession?.role;
     if (storedRole === 'CITIZEN') {
       setNavLinks(userNavLinks);
-    } else if (storedRole === 'ADMIN' || storedRole === 'EXECUTIVE') {
+    } else if (storedRole === 'ADMIN') {
       setNavLinks(adminNavLinks);
+    } else if (storedRole === 'EXECUTIVE') {
+      setNavLinks(providerNavLinks);
     } else {
         setNavLinks(userNavLinks); // Default to user if no role
     }

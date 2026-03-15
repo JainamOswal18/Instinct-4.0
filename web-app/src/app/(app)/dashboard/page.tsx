@@ -7,22 +7,19 @@ import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { fetchServices } from '@/lib/customer-api';
 import {
-  getServiceRequests,
-  getProviderNotifications,
-  dismissProviderNotification,
-  updateServiceRequestStatus,
-  completeSurvey,
-  addUserNotification,
   getUserNotifications,
   dismissUserNotification,
-  saveBillingDraft,
-  getBillingDrafts,
-  approveBillingDraft,
-  type ProviderNotification,
   type UserNotification,
-  type ServiceRequest,
   type BillingPlan,
 } from '@/lib/notifications';
+import {
+  createProviderBillingDraft,
+  fetchProviderBillingDrafts,
+  fetchProviderDashboard,
+  fetchProviderRequests,
+  updateProviderRequestStatus,
+  type ProviderRequestStatus,
+} from '@/lib/provider-api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +51,31 @@ type ServiceCatalogItem = {
   imageId: string;
 };
 
+const SERVICE_IMAGE_BY_ID: Record<string, string> = {
+  service_solar: 'solar.jpg',
+  service_lighting: 'lighting.jpg',
+  service_cooling: 'cooling.jpg',
+  service_ev: 'ev-charging.jpg',
+  service_battery: 'battery-backup.jpg',
+};
+
+function resolveServiceImage(service: ServiceCatalogItem): string {
+  const normalizedId = service.id.toLowerCase();
+  const normalizedTitle = service.title.toLowerCase();
+
+  if (SERVICE_IMAGE_BY_ID[normalizedId]) {
+    return SERVICE_IMAGE_BY_ID[normalizedId];
+  }
+
+  if (normalizedId.includes('solar') || normalizedTitle.includes('solar')) return 'solar.jpg';
+  if (normalizedId.includes('lighting') || normalizedTitle.includes('lighting')) return 'lighting.jpg';
+  if (normalizedId.includes('cooling') || normalizedTitle.includes('cooling')) return 'cooling.jpg';
+  if (normalizedId.includes('ev') || normalizedTitle.includes('ev')) return 'ev-charging.jpg';
+  if (normalizedId.includes('battery') || normalizedTitle.includes('battery')) return 'battery-backup.jpg';
+
+  return service.imageId;
+}
+
 // ========================================
 // USER DASHBOARD
 // ========================================
@@ -65,6 +87,7 @@ function UserDashboard() {
   // Track which notification IDs have already been shown as popups to prevent re-triggering
   const shownPopupIds = useState<Set<string>>(() => new Set())[0];
   const [services, setServices] = useState<ServiceCatalogItem[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
 
   const checkNotifications = useCallback(() => {
     const allNotifications = getUserNotifications();
@@ -94,6 +117,11 @@ function UserDashboard() {
       .catch(() => {
         setServices([]);
       });
+
+    import('@/lib/customer-api')
+      .then(({ fetchUserProperties }) => fetchUserProperties())
+      .then((res) => setProperties(res.properties))
+      .catch(console.error);
   }, []);
 
   const handleDismissNotification = (id: string) => {
@@ -169,33 +197,94 @@ function UserDashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* Existing Energies/Properties Cards */}
+      {properties.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold font-headline">Your Energy Properties</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {properties.map((property) => (
+              <Card key={property.id} className="overflow-hidden flex flex-col border-primary/20">
+                <CardHeader className="bg-primary/5 pb-4">
+                  <CardTitle className="font-headline flex items-center justify-between">
+                    {property.name}
+                    <Zap className="h-5 w-5 text-amber-500" />
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-1 mt-1">
+                    <MapPin className="h-4 w-4" /> {property.address}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 flex-1">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Type:</span>
+                      <span className="font-medium capitalize">{property.type}</span>
+                    </div>
+                    {property.solarCapacity && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Solar Capacity:</span>
+                        <span className="font-medium">{property.solarCapacity} kW</span>
+                      </div>
+                    )}
+                    {property.batteryStorage && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Battery Storage:</span>
+                        <span className="font-medium">{property.batteryStorage} kWh</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Plan Status:</span>
+                      <Badge variant="outline">{property.subscriptionStatus}</Badge>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-muted/10 pt-4">
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href={`/grid-status`}>View Energy Dashboard</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Service cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {services.map((service) => {
-          const image = PlaceHolderImages.find(img => img.id === service.imageId);
-          return (
-            <Card key={service.id} className="overflow-hidden flex flex-col">
-              <div className="relative h-48 w-full">
-                <Image
-                  src={image?.imageUrl || ''}
-                  alt={service.title}
-                  fill
-                  className="object-cover"
-                  data-ai-hint={image?.imageHint}
-                />
-              </div>
-              <CardHeader>
-                <CardTitle className="font-headline">{service.title}</CardTitle>
-                <CardDescription>{service.description}</CardDescription>
-              </CardHeader>
-              <CardFooter className="mt-auto">
-                <Button asChild className="w-full">
-                  <Link href={`/request-service/${service.id}`}>UPLOAD AND PROCEED</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        })}
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold font-headline">Available Services</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {services
+            .sort((a, b) => {
+              const order = ['service_solar', 'service_lighting', 'service_cooling', 'service_ev', 'service_battery'];
+              let indexA = order.indexOf(a.id);
+              let indexB = order.indexOf(b.id);
+              if (indexA === -1) indexA = 999;
+              if (indexB === -1) indexB = 999;
+              return indexA - indexB;
+            })
+            .map((service) => {
+            return (
+              <Card key={service.id} className="overflow-hidden flex flex-col border-primary/20">
+                <div className="relative h-48 w-full">
+                  <Image
+                    src={`/assets/${resolveServiceImage(service)}`}
+                    alt={service.title}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <CardHeader>
+                  <CardTitle className="font-headline">{service.title}</CardTitle>
+                  <CardDescription>{service.description}</CardDescription>
+                </CardHeader>
+                <CardFooter className="mt-auto bg-muted/10 pt-4">
+                  <Button asChild className="w-full">
+                    <Link href={`/request-service/${service.id}`}>UPLOAD AND PROCEED</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -206,14 +295,47 @@ function UserDashboard() {
 // ========================================
 function ProviderDashboard() {
   const { toast } = useToast();
-  const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [notifications, setNotifications] = useState<ProviderNotification[]>([]);
-  const [showNotificationDialog, setShowNotificationDialog] = useState(false);
-  const [currentNotification, setCurrentNotification] = useState<ProviderNotification | null>(null);
+  const [requests, setRequests] = useState<Array<{
+    id: string;
+    propertyId: string;
+    customerName: string;
+    serviceTitle: string;
+    status: ProviderRequestStatus;
+    date: string;
+    monthlyConsumption: number;
+    monthlyBill: number;
+    draftId: string | null;
+  }>>([]);
+
+  const [dashboardStats, setDashboardStats] = useState({
+    activeInstallations: 0,
+    pendingSurveys: 0,
+    openTickets: 0,
+    equipmentAlerts: 0,
+    totalMRR: 0,
+    overduePayments: 0,
+  });
+
+  const [pipeline, setPipeline] = useState<Record<string, number>>({
+    survey: 0,
+    approval: 0,
+    procurement: 0,
+    installation: 0,
+    testing: 0,
+    live: 0,
+  });
+  const [recentAlerts, setRecentAlerts] = useState<Array<{ id: string; title: string; severity: string }>>([]);
+  const [pendingBills, setPendingBills] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Billing form state
   const [showBillingForm, setShowBillingForm] = useState(false);
-  const [billingRequest, setBillingRequest] = useState<ServiceRequest | null>(null);
+  const [billingRequest, setBillingRequest] = useState<{
+    id: string;
+    propertyId: string;
+    serviceTitle: string;
+    monthlyConsumption: number;
+  } | null>(null);
   const [billingCustomerName, setBillingCustomerName] = useState('');
   const [billingPlan, setBillingPlan] = useState<BillingPlan>({
     planName: '', summary: '', installationCost: 0, monthlyServiceCharge: 0,
@@ -223,80 +345,77 @@ function ProviderDashboard() {
     }, rationale: '', customCharges: [],
   });
 
-  // Provider data
-  const [pipeline, setPipeline] = useState<Record<string, number>>({});
-  const [openTickets, setOpenTickets] = useState(0);
-  const [equipmentAlerts, setEquipmentAlerts] = useState(0);
-  const [recentAlerts, setRecentAlerts] = useState<import('@/lib/provider-data').ProviderAlert[]>([]);
-  const [revenue, setRevenue] = useState({ totalMRR: 0, overdueCount: 0, totalPaid: 0, totalOutstanding: 0, paidCount: 0, collectionRate: 0 });
-  const [pendingBills, setPendingBills] = useState(0);
+  const loadProviderData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [dashboard, requestData, draftData] = await Promise.all([
+        fetchProviderDashboard(),
+        fetchProviderRequests(),
+        fetchProviderBillingDrafts('draft'),
+      ]);
 
-  const loadData = useCallback(() => {
-    setRequests(getServiceRequests());
-  }, []);
-
-  const loadProviderData = useCallback(() => {
-    const { seedProviderMockData, getInstallationPipeline, getTicketStats, getEquipmentList, getProviderAlerts: getProvAlerts, getRevenueOverview } = require('@/lib/provider-data');
-    seedProviderMockData();
-    setPipeline(getInstallationPipeline());
-    const tStats = getTicketStats();
-    setOpenTickets(tStats['open'] + tStats['awaiting-approval'] + tStats['in-progress']);
-    const eq = getEquipmentList();
-    setEquipmentAlerts(eq.filter((e: any) => e.status !== 'online').length);
-    const alerts = getProvAlerts().filter((a: any) => !a.dismissed);
-    setRecentAlerts(alerts.slice(0, 3));
-    setRevenue(getRevenueOverview());
-    setPendingBills(getBillingDrafts().filter(d => d.status === 'draft').length);
-  }, []);
-
-  const checkNotifications = useCallback(() => {
-    const allNotifications = getProviderNotifications();
-    const pending = allNotifications.filter(n => !n.dismissed);
-    setNotifications(pending);
-
-    if (pending.length > 0 && !currentNotification) {
-      setCurrentNotification(pending[0]);
-      setShowNotificationDialog(true);
+      setDashboardStats(dashboard.stats);
+      setPipeline({
+        survey: dashboard.pipeline.SURVEY || 0,
+        approval: dashboard.pipeline.APPROVAL || 0,
+        procurement: dashboard.pipeline.PROCUREMENT || 0,
+        installation: dashboard.pipeline.INSTALLATION || 0,
+        testing: dashboard.pipeline.TESTING || 0,
+        live: dashboard.pipeline.LIVE || 0,
+      });
+      setRecentAlerts(dashboard.recentAlerts.slice(0, 3).map((item) => ({
+        id: item.id,
+        title: item.title,
+        severity: item.severity,
+      })));
+      setRequests(requestData.requests);
+      setPendingBills(draftData.drafts.length);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Unable to load provider dashboard',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [currentNotification]);
+  }, [toast]);
 
   useEffect(() => {
-    loadData();
     loadProviderData();
-    checkNotifications();
+  }, [loadProviderData]);
 
-    const interval = setInterval(() => {
-      loadData();
-      checkNotifications();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [loadData, loadProviderData, checkNotifications]);
-
-  const handleStartSurvey = (notification: ProviderNotification) => {
-    updateServiceRequestStatus(notification.requestId, 'in-progress');
-    dismissProviderNotification(notification.id);
-    setShowNotificationDialog(false);
-    setCurrentNotification(null);
-    loadData();
-
-    toast({
-      title: "Survey Started",
-      description: `Survey for ${notification.serviceTitle} is now in progress.`,
-    });
-
-    const remaining = getProviderNotifications().filter(n => !n.dismissed);
-    if (remaining.length > 0) {
-      setTimeout(() => {
-        setCurrentNotification(remaining[0]);
-        setShowNotificationDialog(true);
-      }, 500);
+  const handleStartSurvey = async (request: {
+    id: string;
+    serviceTitle: string;
+  }) => {
+    try {
+      await updateProviderRequestStatus(request.id, 'in-progress');
+      await loadProviderData();
+      toast({
+        title: 'Survey Started',
+        description: `Survey for ${request.serviceTitle} is now in progress.`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update request',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
-    setNotifications(remaining);
   };
 
   // Opens the billing form pre-filled based on the request data
-  const openBillingForm = (request: ServiceRequest, customerName: string) => {
-    const consumption = parseInt(request.consumption) || 500;
+  const openBillingForm = (
+    request: {
+      id: string;
+      propertyId: string;
+      serviceTitle: string;
+      monthlyConsumption: number;
+    },
+    customerName: string,
+  ) => {
+    const consumption = request.monthlyConsumption || 500;
     const isHighConsumption = consumption > 800;
     // Pre-fill billing fields based on service type and consumption
     const defaults: Record<string, Partial<BillingPlan>> = {
@@ -334,7 +453,7 @@ function ProviderDashboard() {
     const d = defaults[request.serviceTitle] || defaults['Solar Energy']!;
     setBillingPlan({
       planName: d.planName || `${request.serviceTitle} Plan`,
-      summary: `Custom plan for ${customerName} based on ${consumption} kWh monthly consumption and on-site survey of ${request.areaDescription?.slice(0, 80) || 'the property'}.`,
+      summary: `Custom plan for ${customerName} based on ${consumption} kWh monthly consumption and survey findings.`,
       installationCost: d.installationCost || 150000,
       monthlyServiceCharge: d.monthlyServiceCharge || 2500,
       maintenanceFee: d.maintenanceFee || 500,
@@ -343,7 +462,7 @@ function ProviderDashboard() {
       paybackPeriodMonths: d.paybackPeriodMonths || 48,
       features: d.features || ['Standard installation', '24/7 monitoring', 'Quarterly maintenance', 'Hardware warranty'],
       specifications: d.specifications || { systemCapacity: '', expectedGeneration: '', warrantyPeriod: '', equipmentDetails: '' },
-      rationale: `Based on the customer's ${consumption} kWh consumption, area survey, and uploaded documents.`,
+      rationale: `Based on the customer's ${consumption} kWh consumption and completed survey assessment.`,
       customCharges: [],
     });
     setBillingRequest(request);
@@ -352,81 +471,95 @@ function ProviderDashboard() {
   };
 
   // Approve and send billing to user
-  const approveBillingForm = () => {
+  const approveBillingForm = async () => {
     if (!billingRequest) return;
     const finalPlan = {
       ...billingPlan,
       totalMonthly: billingPlan.monthlyServiceCharge + billingPlan.maintenanceFee +
         (billingPlan.customCharges || []).filter(c => c.recurring).reduce((s, c) => s + c.amount, 0),
     };
-    saveBillingDraft({
-      requestId: billingRequest.id,
-      serviceTitle: billingRequest.serviceTitle,
-      consumption: billingRequest.consumption,
-      areaDescription: billingRequest.areaDescription,
-      fileNames: billingRequest.fileNames,
-      customerName: billingCustomerName,
-      generatedPlan: finalPlan,
-    });
-    // Immediately mark as provider-approved
-    const drafts = getBillingDrafts();
-    const latest = drafts[drafts.length - 1];
-    if (latest) {
-      approveBillingDraft(latest.id, finalPlan);
-    }
-    addUserNotification(
-      `Great news! Your custom billing plan for "${billingRequest.serviceTitle}" is ready. Visit the Billing section to review and accept your plan.`,
-      'billing-ready'
-    );
-    setShowBillingForm(false);
-    setBillingRequest(null);
-    loadData();
-    loadProviderData();
-    toast({ title: 'Bill Approved & Sent', description: `${billingCustomerName} has been notified about their billing plan.` });
-  };
+    try {
+      await createProviderBillingDraft({
+        propertyId: billingRequest.propertyId,
+        surveyId: billingRequest.id,
+        title: finalPlan.planName,
+        description: finalPlan.summary,
+        lineItems: [
+          { type: 'features', values: finalPlan.features },
+          { type: 'specifications', values: finalPlan.specifications },
+          { type: 'rationale', value: finalPlan.rationale },
+          { type: 'customCharges', values: finalPlan.customCharges || [] },
+        ],
+        charges: {
+          subscriptionFee: finalPlan.monthlyServiceCharge,
+          usageCharge: finalPlan.installationCost,
+          taxes: finalPlan.maintenanceFee,
+        },
+        status: 'sent',
+      });
 
-  const handleCompleteSurvey = (notification: ProviderNotification) => {
-    const request = getServiceRequests().find(r => r.id === notification.requestId);
-    if (request) {
-      updateServiceRequestStatus(notification.requestId, 'completed');
-      completeSurvey(request);
-      // Open billing form instead of calling Gemini
-      openBillingForm(request, notification.userName);
-    }
-
-    dismissProviderNotification(notification.id);
-    setShowNotificationDialog(false);
-    setCurrentNotification(null);
-    loadData();
-    loadProviderData();
-
-    const remaining = getProviderNotifications().filter(n => !n.dismissed);
-    if (remaining.length > 0) {
-      setTimeout(() => {
-        setCurrentNotification(remaining[0]);
-        setShowNotificationDialog(true);
-      }, 500);
-    }
-    setNotifications(remaining);
-  };
-
-  const handleTableStatusChange = (id: string, newStatus: string) => {
-    if (newStatus === 'completed') {
-      const request = getServiceRequests().find(r => r.id === id);
-      if (request) {
-        updateServiceRequestStatus(id, 'completed');
-        completeSurvey(request);
-        openBillingForm(request, 'Customer');
-      }
-    } else {
-      updateServiceRequestStatus(id, newStatus as ServiceRequest['status']);
+      setShowBillingForm(false);
+      setBillingRequest(null);
+      await loadProviderData();
+      toast({ title: 'Bill Approved & Sent', description: `${billingCustomerName} has been notified about their billing plan.` });
+    } catch (error) {
       toast({
-        title: "Status Updated",
-        description: `Survey status changed to ${newStatus}.`,
+        variant: 'destructive',
+        title: 'Failed to send billing plan',
+        description: error instanceof Error ? error.message : 'Unknown error',
       });
     }
-    loadData();
-    loadProviderData();
+  };
+
+  const handleCompleteSurvey = async (request: {
+    id: string;
+    propertyId: string;
+    serviceTitle: string;
+    customerName: string;
+    monthlyConsumption: number;
+  }) => {
+    try {
+      await updateProviderRequestStatus(request.id, 'completed');
+      openBillingForm(request, request.customerName);
+      await loadProviderData();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to complete survey',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  const handleTableStatusChange = async (
+    request: {
+      id: string;
+      propertyId: string;
+      serviceTitle: string;
+      customerName: string;
+      monthlyConsumption: number;
+    },
+    newStatus: ProviderRequestStatus,
+  ) => {
+    if (newStatus === 'completed') {
+      await handleCompleteSurvey(request);
+      return;
+    }
+
+    try {
+      await updateProviderRequestStatus(request.id, newStatus);
+      await loadProviderData();
+      toast({
+        title: 'Status Updated',
+        description: `Survey status changed to ${newStatus}.`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to update survey status',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -462,123 +595,17 @@ function ProviderDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Notification banner */}
-      {notifications.length > 0 && (
+      {!isLoading && requests.filter((item) => item.status === 'pending').length > 0 && (
         <Alert className="border-primary/50 bg-primary/5">
           <Bell className="h-4 w-4 text-primary" />
           <AlertTitle className="text-primary">
-            {notifications.length} new service request{notifications.length > 1 ? 's' : ''}
+            {requests.filter((item) => item.status === 'pending').length} pending survey request{requests.filter((item) => item.status === 'pending').length > 1 ? 's' : ''}
           </AlertTitle>
           <AlertDescription>
-            A customer has submitted a new energy service request. Click to review.
-            <Button
-              variant="link"
-              className="ml-2 p-0 h-auto text-primary font-semibold"
-              onClick={() => {
-                if (notifications.length > 0) {
-                  setCurrentNotification(notifications[0]);
-                  setShowNotificationDialog(true);
-                }
-              }}
-            >
-              Review Request →
-            </Button>
+            New customer survey submissions are waiting for action in the table below.
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Provider Notification Popup (unchanged) */}
-      <Dialog open={showNotificationDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowNotificationDialog(false);
-        }
-      }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-              <ClipboardCheck className="h-7 w-7 text-primary" />
-            </div>
-            <DialogTitle className="text-center font-headline text-xl">
-              New Service Request
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              A customer requires an on-site survey
-            </DialogDescription>
-          </DialogHeader>
-
-          {currentNotification && (
-            <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Customer</p>
-                  <p className="text-sm font-semibold">{currentNotification.userName}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Service</p>
-                  <p className="text-sm font-semibold flex items-center gap-1">
-                    <Zap className="h-3.5 w-3.5 text-primary" />
-                    {currentNotification.serviceTitle}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Consumption</p>
-                  <p className="text-sm font-semibold">{currentNotification.consumption} kWh</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Submitted</p>
-                  <p className="text-sm font-semibold">{currentNotification.date}</p>
-                </div>
-              </div>
-
-              {currentNotification.areaDescription && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    Area Description
-                  </p>
-                  <p className="text-sm rounded-md bg-muted/50 p-3 leading-relaxed">
-                    {currentNotification.areaDescription}
-                  </p>
-                </div>
-              )}
-
-              {currentNotification.fileNames.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Uploaded Documents ({currentNotification.fileNames.length})
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {currentNotification.fileNames.map((name, i) => (
-                      <Badge key={i} variant="outline" className="gap-1">
-                        <FileText className="h-3 w-3" />
-                        {name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button
-              variant="outline"
-              className="flex-1 gap-2"
-              onClick={() => currentNotification && handleStartSurvey(currentNotification)}
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              Start Survey
-            </Button>
-            <Button
-              className="flex-1 gap-2"
-              onClick={() => currentNotification && handleCompleteSurvey(currentNotification)}
-            >
-              <CheckCircle className="h-4 w-4" />
-              Completed Survey
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* ====== KPI Stats Cards ====== */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -598,7 +625,7 @@ function ProviderDashboard() {
             <ClipboardCheck className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{requests.filter(r => r.status === 'pending').length}</div>
+            <div className="text-2xl font-bold">{dashboardStats.pendingSurveys}</div>
             <p className="text-xs text-muted-foreground">{requests.length} total requests</p>
           </CardContent>
         </Card>
@@ -608,7 +635,7 @@ function ProviderDashboard() {
             <Info className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{openTickets}</div>
+            <div className="text-2xl font-bold">{dashboardStats.openTickets}</div>
             <p className="text-xs text-muted-foreground">Needs attention</p>
           </CardContent>
         </Card>
@@ -618,7 +645,7 @@ function ProviderDashboard() {
             <X className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{equipmentAlerts}</div>
+            <div className="text-2xl font-bold">{dashboardStats.equipmentAlerts}</div>
             <p className="text-xs text-muted-foreground">Offline or degraded</p>
           </CardContent>
         </Card>
@@ -628,8 +655,8 @@ function ProviderDashboard() {
             <ArrowRight className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatINR(revenue.totalMRR)}</div>
-            <p className="text-xs text-muted-foreground">{revenue.collectionRate}% collected</p>
+            <div className="text-2xl font-bold">{formatINR(dashboardStats.totalMRR)}</div>
+            <p className="text-xs text-muted-foreground">{dashboardStats.overduePayments} overdue</p>
           </CardContent>
         </Card>
         <Card className={pendingBills > 0 ? 'border-primary/50' : ''}>
@@ -708,7 +735,7 @@ function ProviderDashboard() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{alert.title}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{alert.message}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">Recent provider alert</p>
                   </div>
                   <Badge variant={alert.severity === 'critical' ? 'destructive' : 'outline'} className="shrink-0 text-[10px]">
                     {alert.severity}
@@ -748,9 +775,9 @@ function ProviderDashboard() {
               <TableBody>
                 {requests.slice(0, 5).map((req) => (
                   <TableRow key={req.id}>
-                    <TableCell className="font-medium">Alex Doe</TableCell>
+                    <TableCell className="font-medium">{req.customerName}</TableCell>
                     <TableCell>{req.serviceTitle}</TableCell>
-                    <TableCell>{req.consumption} kWh</TableCell>
+                    <TableCell>{req.monthlyConsumption} kWh</TableCell>
                     <TableCell>{req.date}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusBadgeVariant(req.status)}>
@@ -763,14 +790,14 @@ function ProviderDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleTableStatusChange(req.id, 'in-progress')}
+                            onClick={() => handleTableStatusChange(req, 'in-progress')}
                             disabled={req.status === 'in-progress'}
                           >
                             In Progress
                           </Button>
                           <Button
                             size="sm"
-                            onClick={() => handleTableStatusChange(req.id, 'completed')}
+                            onClick={() => handleTableStatusChange(req, 'completed')}
                           >
                             Mark Completed
                           </Button>
@@ -795,7 +822,7 @@ function ProviderDashboard() {
             </DialogTitle>
             <DialogDescription>
               {billingRequest && <>
-                Preparing billing for <strong>{billingCustomerName}</strong> — {billingRequest.serviceTitle} ({billingRequest.consumption} kWh consumption).
+                Preparing billing for <strong>{billingCustomerName}</strong> — {billingRequest.serviceTitle} ({billingRequest.monthlyConsumption} kWh consumption).
                 All fields are editable.
               </>}
             </DialogDescription>
@@ -1096,8 +1123,9 @@ export default function DashboardPage() {
       case 'CITIZEN':
         return <UserDashboard />;
       case 'ADMIN':
-      case 'EXECUTIVE':
         return <AdminDashboard />;
+      case 'EXECUTIVE':
+        return <ProviderDashboard />;
       default:
         return <p className="p-8 text-center text-muted-foreground">Authenticating session...</p>;
     }
@@ -1106,7 +1134,7 @@ export default function DashboardPage() {
   const roleDisplayNames: { [key: string]: string } = {
     CITIZEN: 'Your Energy Portal',
     ADMIN: 'EaaS Nexus Command',
-    EXECUTIVE: 'Executive Command View',
+    EXECUTIVE: 'Provider Command View',
   };
 
   const title = role ? roleDisplayNames[role] : "Welcome";

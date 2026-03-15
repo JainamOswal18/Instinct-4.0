@@ -2,14 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import {
-  getInstallations,
-  updateInstallationStatus,
-  getInstallationPipeline,
-  seedProviderMockData,
-  INSTALLATION_STAGES,
-  type Installation,
-  type InstallationStatus,
-} from '@/lib/provider-data';
+  fetchProviderInstallations,
+  fetchProviderPipeline,
+  updateProviderInstallationStatus,
+  type ProviderInstallationStatus,
+} from '@/lib/provider-api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +28,36 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Wrench, ArrowRight, IndianRupee, Clock, User, Zap, ChevronRight, Package } from 'lucide-react';
 
+type InstallationStatus = ProviderInstallationStatus;
+type Installation = {
+  id: string;
+  propertyId: string;
+  serviceTitle: string;
+  customerName: string;
+  machineName: string;
+  machineCost: number;
+  estimatedSetupDays: number;
+  actualStartDate?: string;
+  completedDate?: string;
+  status: InstallationStatus;
+  assignedTechnician: string;
+  notes?: string;
+  subscriptionPlanSummary?: {
+    planName: string;
+    totalMonthly: number;
+  };
+  createdAt: string;
+};
+
+const INSTALLATION_STAGES: InstallationStatus[] = [
+  'survey',
+  'approval',
+  'procurement',
+  'installation',
+  'testing',
+  'live',
+];
+
 const stageConfig: Record<InstallationStatus, { label: string; color: string; bgColor: string }> = {
   survey: { label: 'Survey', color: 'text-amber-500', bgColor: 'bg-amber-500' },
   approval: { label: 'Approval', color: 'text-orange-500', bgColor: 'bg-orange-500' },
@@ -47,26 +74,48 @@ export default function InstallationsPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedInstallation, setSelectedInstallation] = useState<Installation | null>(null);
 
-  const loadData = () => {
-    seedProviderMockData();
-    setInstallations(getInstallations());
-    setPipeline(getInstallationPipeline());
+  const loadData = async () => {
+    try {
+      const [installationData, pipelineData] = await Promise.all([
+        fetchProviderInstallations(),
+        fetchProviderPipeline(),
+      ]);
+      setInstallations(installationData.installations as Installation[]);
+      setPipeline(pipelineData.pipeline);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load installations',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   };
 
   useEffect(() => {
-    loadData();
+    loadData().catch(() => undefined);
   }, []);
 
-  const handleAdvanceStatus = (id: string, currentStatus: InstallationStatus) => {
+  const handleAdvanceStatus = async (id: string, currentStatus: InstallationStatus) => {
     const currentIndex = INSTALLATION_STAGES.indexOf(currentStatus);
     if (currentIndex < INSTALLATION_STAGES.length - 1) {
       const nextStatus = INSTALLATION_STAGES[currentIndex + 1];
       const extra: Partial<Installation> = {};
       if (nextStatus === 'installation') extra.actualStartDate = new Date().toISOString().split('T')[0];
       if (nextStatus === 'live') extra.completedDate = new Date().toISOString().split('T')[0];
-      updateInstallationStatus(id, nextStatus, extra);
-      loadData();
-      toast({ title: 'Status Updated', description: `Installation moved to ${stageConfig[nextStatus].label}.` });
+      try {
+        await updateProviderInstallationStatus(id, nextStatus, {
+          assignedTechnician: extra.assignedTechnician,
+          notes: extra.notes,
+        });
+        await loadData();
+        toast({ title: 'Status Updated', description: `Installation moved to ${stageConfig[nextStatus].label}.` });
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to update installation',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     }
   };
 
