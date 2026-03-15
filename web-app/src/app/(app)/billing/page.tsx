@@ -260,11 +260,10 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
                 <button
                   key={months}
                   onClick={() => setSelectedDuration(months as 12 | 24 | 36)}
-                  className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${
-                    selectedDuration === months
-                      ? 'bg-background shadow-sm text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${selectedDuration === months
+                    ? 'bg-background shadow-sm text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   {months} Mon {months > 12 && <span className="text-[10px] text-green-600 font-bold ml-1">-{months === 24 ? 5 : 10}%</span>}
                 </button>
@@ -307,9 +306,9 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
                   ))}
                 </>
               )}
-              
+
               <Separator className="my-4" />
-              
+
               <div className="space-y-1 py-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Base Monthly</span>
@@ -513,7 +512,7 @@ export default function BillingPage() {
 
       {/* Already responded bills */}
       {respondedBills.map(bill => (
-        <ApprovedBillCard key={bill.id} bill={bill} onRespond={() => {}} />
+        <ApprovedBillCard key={bill.id} bill={bill} onRespond={() => { }} />
       ))}
 
       {/* Payment methods & Invoice History */}

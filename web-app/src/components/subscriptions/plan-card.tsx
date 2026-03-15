@@ -17,6 +17,13 @@ type PlanCardProps = {
 };
 
 export default function PlanCard({ plan, billingCycle }: PlanCardProps) {
+    const formatINR = (amount: number) =>
+        new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            maximumFractionDigits: 0,
+        }).format(amount);
+
     return (
         <Card className={cn("flex flex-col", plan.isPopular && "border-primary ring-2 ring-primary shadow-lg")}>
             {plan.isPopular && (
@@ -29,7 +36,7 @@ export default function PlanCard({ plan, billingCycle }: PlanCardProps) {
                 <div className="flex items-baseline">
                     {plan.price !== null ? (
                         <>
-                            <span className="text-4xl font-bold tracking-tight">${plan.price}</span>
+                            <span className="text-4xl font-bold tracking-tight">{formatINR(plan.price)}</span>
                             <span className="ml-1 text-xl font-semibold text-muted-foreground">{billingCycle}</span>
                         </>
                     ) : (

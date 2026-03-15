@@ -72,7 +72,7 @@ export const mockStats: Array<{
   changeType: 'increase' | 'decrease';
 }> = [
   { label: 'Current Usage', value: '12.5 kWh', change: '+5.2%', changeType: 'increase' },
-  { label: 'Est. Monthly Bill', value: '$112.50', change: '-2.1%', changeType: 'decrease' },
+  { label: 'Est. Monthly Bill', value: '₹112.50', change: '-2.1%', changeType: 'decrease' },
   { label: 'CO2 Saved This Month', value: '8.2 kg', change: '+10%', changeType: 'decrease' },
   { label: 'Grid Status', value: 'Online', change: 'Stable', changeType: 'decrease' },
 ];
