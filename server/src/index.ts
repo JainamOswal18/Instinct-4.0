@@ -16,6 +16,16 @@ import alertsRoutes from './routes/alerts.routes';
 import billingRoutes from './routes/billing.routes';
 import supportRoutes from './routes/support.routes';
 import aiRoutes from './routes/ai.routes';
+import maintenanceRoutes from './routes/maintenance.routes';
+import servicesRoutes from './routes/services.routes';
+import insightsRoutes from './routes/insights.routes';
+import providerDashboardRoutes from './routes/provider.dashboard.routes';
+import providerInstallationsRoutes from './routes/provider.installations.routes';
+import providerCustomersRoutes from './routes/provider.customers.routes';
+import providerRevenueRoutes from './routes/provider.revenue.routes';
+import providerTicketsRoutes from './routes/provider.tickets.routes';
+import providerEquipmentRoutes from './routes/provider.equipment.routes';
+import providerAlertsRoutes from './routes/provider.alerts.routes';
 import swaggerSpec from './config/swagger';
 import { verifyToken } from './utils/jwt';
 import { publishEnergyEvent } from './utils/realtime';
@@ -67,6 +77,19 @@ app.use(['/billing', '/api/billing'], billingRoutes);
 app.use(['/support', '/api/support'], supportRoutes);
 app.use(['/user', '/api/user'], userRoutes);
 app.use(['/ai', '/api/ai'], aiRoutes);
+app.use(['/maintenance', '/api/maintenance'], maintenanceRoutes);
+app.use(['/services', '/api/services'], servicesRoutes);
+app.use(['/insights', '/api/insights'], insightsRoutes);
+app.use(
+  ['/provider', '/api/provider'],
+  providerDashboardRoutes,
+  providerInstallationsRoutes,
+  providerCustomersRoutes,
+  providerRevenueRoutes,
+  providerTicketsRoutes,
+  providerEquipmentRoutes,
+  providerAlertsRoutes,
+);
 
 // ── Swagger UI ────────────────────────────────────────────────
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

@@ -16,6 +16,7 @@ const routeBaseMap = {
   'alerts.routes.ts': '/alerts',
   'billing.routes.ts': '/billing',
   'support.routes.ts': '/support',
+  'maintenance.routes.ts': '/maintenance',
   'user.routes.ts': '/user',
   'ai.routes.ts': '/ai',
 };

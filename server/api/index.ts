@@ -13,6 +13,7 @@ import alertsRoutes from '../src/routes/alerts.routes';
 import billingRoutes from '../src/routes/billing.routes';
 import supportRoutes from '../src/routes/support.routes';
 import aiRoutes from '../src/routes/ai.routes';
+import maintenanceRoutes from '../src/routes/maintenance.routes';
 import swaggerSpec from '../src/config/swagger';
 
 const CDN = 'https://unpkg.com/swagger-ui-dist@5.32.0';
@@ -70,6 +71,7 @@ app.use(['/billing', '/api/billing'], billingRoutes);
 app.use(['/support', '/api/support'], supportRoutes);
 app.use(['/user', '/api/user'], userRoutes);
 app.use(['/ai', '/api/ai'], aiRoutes);
+app.use(['/maintenance', '/api/maintenance'], maintenanceRoutes);
 
 // ── Swagger UI (CDN-backed, works in serverless) ──────────────
 app.get('/api/docs', (_req, res) => {

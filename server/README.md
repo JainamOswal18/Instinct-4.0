@@ -73,6 +73,7 @@ cp .env.example .env
 | `JWT_SECRET` | Secret key for signing JWTs | — |
 | `JWT_EXPIRES_IN` | Token expiry duration | `7d` |
 | `BCRYPT_ROUNDS` | bcrypt cost factor | `12` |
+| `ALLOW_ELEVATED_SIGNUP` | Allow signup as `ADMIN`/`EXECUTIVE` | `true` |
 
 ### 3. Start the dev server
 
@@ -104,8 +105,23 @@ Server is available at **http://localhost:3001**
 
 | Method | Path | Auth | Roles | Description |
 |--------|------|------|-------|-------------|
-| `GET` | `/api/users` | Bearer | ADMIN, EXECUTIVE | List all users |
-| `PATCH` | `/api/users/:id/deactivate` | Bearer | ADMIN | Deactivate a user |
+| `GET` | `/api/user/admin/users` | Bearer | ADMIN, EXECUTIVE | List users |
+| `PATCH` | `/api/user/admin/users/:id/status` | Bearer | ADMIN | Activate/deactivate user |
+| `PATCH` | `/api/user/admin/users/:id/role` | Bearer | ADMIN | Update user role |
+| `GET` | `/api/user/admin/audit-logs` | Bearer | ADMIN, EXECUTIVE | View admin audit logs |
+
+### Admin Operations
+
+| Method | Path | Auth | Roles | Description |
+|--------|------|------|-------|-------------|
+| `GET` | `/api/subscription/admin/properties` | Bearer | ADMIN, EXECUTIVE | Property oversight list |
+| `PATCH` | `/api/subscription/admin/properties/:propertyId/subscription-status` | Bearer | ADMIN | Update subscription state |
+| `GET` | `/api/billing/admin/all` | Bearer | ADMIN, EXECUTIVE | Billing operations list |
+| `PATCH` | `/api/billing/admin/:billId/adjust` | Bearer | ADMIN | Manual bill adjustment |
+| `GET` | `/api/support/admin/tickets` | Bearer | ADMIN, EXECUTIVE | Support queue overview |
+| `PATCH` | `/api/support/admin/tickets/:ticketId` | Bearer | ADMIN | Update ticket status/priority |
+| `POST` | `/api/notifications/admin/broadcast` | Bearer | ADMIN | Send platform broadcast |
+| `GET` | `/api/energy/admin/analytics/overview` | Bearer | ADMIN, EXECUTIVE | Platform KPI snapshot |
 
 ---
 
@@ -127,7 +143,9 @@ All protected routes require an `Authorization` header:
 Authorization: Bearer <token>
 ```
 
-The token is returned in the `data.token` field of both `/api/auth/register` and `/api/auth/login` responses.
+The token is returned in the `data.accessToken` field of both `/api/auth/register` and `/api/auth/login` responses.
+
+Admin write operations are audited in `admin_audit_logs`.
 
 ### Register example
 

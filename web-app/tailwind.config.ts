@@ -17,8 +17,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        body: ['PT Sans', 'sans-serif'],
-        headline: ['Space Grotesk', 'sans-serif'],
+        body: ['PT Sans', 'Noto Sans', 'sans-serif'],
+        headline: ['Space Grotesk', 'Noto Sans', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

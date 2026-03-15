@@ -1,10 +1,9 @@
 
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { energyServices } from '@/lib/mock-data';
-import { submitServiceRequest } from '@/lib/notifications';
+import { fetchServices, submitServiceRequest as submitServiceRequestApi } from '@/lib/customer-api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +19,13 @@ type UploadedFile = {
   previewUrl: string | null;
 };
 
+type ServiceCatalogItem = {
+  id: string;
+  title: string;
+  description: string;
+  imageId: string;
+};
+
 export default function RequestServicePage() {
   const params = useParams();
   const router = useRouter();
@@ -30,9 +36,24 @@ export default function RequestServicePage() {
   const [consumption, setConsumption] = useState('');
   const [areaDescription, setAreaDescription] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [services, setServices] = useState<ServiceCatalogItem[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const service = energyServices.find(s => s.id === params.serviceId);
+
+  useEffect(() => {
+    fetchServices()
+      .then((result) => setServices(result.services))
+      .catch((error) => {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to load services',
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      })
+      .finally(() => setIsLoadingServices(false));
+  }, []);
+
+  const service = services.find(s => s.id === params.serviceId);
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files) return;
@@ -104,11 +125,15 @@ export default function RequestServicePage() {
     handleFiles(e.dataTransfer.files);
   };
 
+  if (isLoadingServices) {
+    return <div className="p-8 text-center">Loading service...</div>;
+  }
+
   if (!service) {
     return <div className="p-8 text-center">Service not found.</div>;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!consumption) {
@@ -122,18 +147,27 @@ export default function RequestServicePage() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      submitServiceRequest({
+    try {
+      await submitServiceRequestApi({
         serviceId: service.id,
-        serviceTitle: service.title,
-        consumption,
+        consumption: Number(consumption),
         areaDescription,
-        fileNames: uploadedFiles.map(uf => uf.file.name),
+        files: uploadedFiles.map(uf => ({
+          fileName: uf.file.name,
+          mimeType: uf.file.type,
+          sizeBytes: uf.file.size,
+        })),
       });
-
       setIsSubmitted(true);
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Request submission failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const formatFileSize = (bytes: number) => {

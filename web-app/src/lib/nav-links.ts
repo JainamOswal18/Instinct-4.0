@@ -47,6 +47,12 @@ export const providerNavLinks: NavLink[] = [
 
 export const adminNavLinks: NavLink[] = [
   { href: '/dashboard', label: 'Admin Panel', icon: ShieldCheck },
+  { href: '/admin/users', label: 'Users', icon: ClipboardList },
+  { href: '/admin/properties', label: 'Properties', icon: FileText },
+  { href: '/admin/subscriptions', label: 'Subscriptions', icon: Zap },
+  { href: '/admin/billing', label: 'Billing Ops', icon: FileText },
+  { href: '/admin/support', label: 'Support Ops', icon: LifeBuoy },
+  { href: '/admin/notifications', label: 'Broadcasts', icon: ShieldCheck },
   { href: '/analytics', label: 'Facility Analytics', icon: AreaChart },
   { href: '/grid-status', label: 'Grid Monitoring', icon: Zap },
 ];

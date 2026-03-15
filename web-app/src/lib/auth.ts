@@ -1,98 +1,121 @@
-// Simple localStorage-based auth system
+import { apiRequest } from './api';
+
+export type AppRole = 'CITIZEN' | 'ADMIN' | 'EXECUTIVE';
 
 export interface User {
   name: string;
   email: string;
-  role: 'user' | 'provider' | 'admin';
+  role: AppRole;
   phone: string;
   password: string;
 }
 
 export interface AuthSession {
+  id: string;
   email: string;
   name: string;
-  role: string;
-  phone: string;
+  role: AppRole;
+  phone: string | null;
+  accessToken: string;
 }
 
-const USERS_KEY = 'eaas_registered_users';
-const SESSION_KEY = 'eaas_session';
+const SESSION_KEY = 'eaas_session_v2';
 
-// Get all registered users
-function getRegisteredUsers(): User[] {
-  if (typeof window === 'undefined') return [];
-  const data = localStorage.getItem(USERS_KEY);
-  return data ? JSON.parse(data) : [];
-}
-
-// Save users to localStorage
-function saveUsers(users: User[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-// Register a new user
-export function registerUser(user: User): { success: boolean; message: string } {
-  const users = getRegisteredUsers();
-  const existing = users.find((u) => u.email.toLowerCase() === user.email.toLowerCase());
-  if (existing) {
-    return { success: false, message: 'An account with this email already exists. Please login instead.' };
-  }
-  users.push(user);
-  saveUsers(users);
-
-  // Auto-login after registration
-  const session: AuthSession = {
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    phone: user.phone,
+interface AuthApiPayload {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    phone: string | null;
+    role: AppRole;
   };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  // Keep backward compatibility with existing role system
-  localStorage.setItem('userRole', user.role);
-
-  return { success: true, message: 'Account created successfully!' };
+  accessToken: string;
 }
 
-// Login an existing user
-export function loginUser(email: string, password: string): { success: boolean; message: string } {
-  const users = getRegisteredUsers();
-  const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) {
-    return { success: false, message: 'No account found with this email. Please sign up first.' };
-  }
-  if (user.password !== password) {
-    return { success: false, message: 'Incorrect password. Please try again.' };
-  }
+function normalizeRole(role: unknown): AppRole {
+  return role === 'ADMIN' || role === 'EXECUTIVE' || role === 'CITIZEN' ? role : 'CITIZEN';
+}
 
-  // Create session
+function persistSession(payload: AuthApiPayload): void {
+  if (typeof window === 'undefined') return;
+
   const session: AuthSession = {
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    phone: user.phone,
+    id: payload.user.id,
+    email: payload.user.email,
+    name: payload.user.name,
+    phone: payload.user.phone ?? null,
+    role: normalizeRole(payload.user.role),
+    accessToken: payload.accessToken,
   };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  localStorage.setItem('userRole', user.role);
 
-  return { success: true, message: 'Login successful!' };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
-// Get current session
+export async function registerUser(user: User): Promise<{ success: boolean; message: string }> {
+  const result = await apiRequest<AuthApiPayload>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: user.name,
+      email: user.email,
+      password: user.password,
+      phone: user.phone,
+      role: user.role,
+    }),
+  });
+
+  if (!result.success || !result.data) {
+    return { success: false, message: result.message || 'Registration failed' };
+  }
+
+  persistSession(result.data);
+  return { success: true, message: result.message || 'Account created successfully' };
+}
+
+export async function loginUser(email: string, password: string): Promise<{ success: boolean; message: string }> {
+  const result = await apiRequest<AuthApiPayload>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!result.success || !result.data) {
+    return { success: false, message: result.message || 'Login failed' };
+  }
+
+  persistSession(result.data);
+  return { success: true, message: result.message || 'Login successful' };
+}
+
 export function getSession(): AuthSession | null {
   if (typeof window === 'undefined') return null;
-  const data = localStorage.getItem(SESSION_KEY);
-  return data ? JSON.parse(data) : null;
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as AuthSession;
+  } catch {
+    localStorage.removeItem(SESSION_KEY);
+    return null;
+  }
 }
 
-// Logout
-export function logout() {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('surveyStatus');
+export function getAccessToken(): string | null {
+  return getSession()?.accessToken || null;
 }
 
-// Check if user is authenticated
+export async function logout(): Promise<void> {
+  const token = getAccessToken();
+  if (token) {
+    await apiRequest('/auth/logout', { method: 'POST' }, token);
+  }
+
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem('surveyStatus');
+  }
+}
+
 export function isAuthenticated(): boolean {
-  return getSession() !== null;
+  const session = getSession();
+  return Boolean(session?.accessToken);
 }
+

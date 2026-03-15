@@ -28,10 +28,9 @@ export default function EnergyChart() {
         
         const newDataPoint = {
           time: nextDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-          consumption: (Math.random() * 5 + 2).toFixed(1),
+          consumption: Number((Math.random() * 5 + 2).toFixed(1)),
         };
         const updatedData = [...currentData.slice(1), newDataPoint];
-        // @ts-ignore
         return updatedData;
       });
     }, 5000); // Update every 5 seconds

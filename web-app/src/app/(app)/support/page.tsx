@@ -523,11 +523,10 @@ export default function SupportPage() {
                       {selectedTicket.responses.map(resp => (
                         <div
                           key={resp.id}
-                          className={`p-3 rounded-lg text-sm ${
-                            resp.author === 'user'
+                          className={`p-3 rounded-lg text-sm ${resp.author === 'user'
                               ? 'bg-primary/5 border border-primary/20 ml-4'
                               : 'bg-muted/50 mr-4'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-medium capitalize">{resp.author}</span>
@@ -548,7 +547,7 @@ export default function SupportPage() {
                         placeholder="Type a response..."
                         value={responseText}
                         onChange={e => setResponseText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddResponse(); }}}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddResponse(); } }}
                         className="flex-1"
                       />
                       <Button size="sm" onClick={handleAddResponse} disabled={!responseText.trim()}>

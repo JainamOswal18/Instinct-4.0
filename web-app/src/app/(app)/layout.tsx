@@ -1,11 +1,24 @@
+"use client";
+
 import AppSidebar from '@/components/layout/app-sidebar';
 import AppHeader from '@/components/layout/app-header';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { isAuthenticated } from '@/lib/auth';
 
 export default function AppLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace('/');
+    }
+  }, [router]);
+
   return (
     <div className="flex min-h-screen w-full">
       <AppSidebar />
