@@ -78,6 +78,7 @@ enum TicketCategory {
 
 enum TicketStatus {
   open
+  awaiting_approval
   in_progress
   resolved
   closed

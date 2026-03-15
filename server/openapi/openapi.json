@@ -60,7 +60,8 @@
     { "name": "Support" },
     { "name": "User" },
     { "name": "Maintenance" },
-    { "name": "AI" }
+    { "name": "AI" },
+    { "name": "Provider" }
   ],
   "paths": {
     "/health": {
@@ -1304,6 +1305,522 @@
         "responses": {
           "200": {
             "description": "Chat history",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/dashboard": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get provider dashboard overview",
+        "responses": {
+          "200": {
+            "description": "Provider dashboard data",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/installations": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List installations",
+        "parameters": [
+          { "in": "query", "name": "status", "schema": { "type": "string" } },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Installations list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/installations/pipeline": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get installation pipeline",
+        "responses": {
+          "200": {
+            "description": "Pipeline summary",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/installations/{installationId}": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get installation details",
+        "parameters": [
+          { "in": "path", "name": "installationId", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Installation details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/installations/{installationId}/status": {
+      "patch": {
+        "tags": ["Provider"],
+        "summary": "Update installation status",
+        "parameters": [
+          { "in": "path", "name": "installationId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "status": "PROCUREMENT",
+                "notes": "Equipment ordered",
+                "assignedTechnician": "Rajesh Sharma"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installation updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/customers": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List provider customers",
+        "parameters": [
+          { "in": "query", "name": "search", "schema": { "type": "string" } },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customers list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/customers/{propertyId}/consumption": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get customer consumption",
+        "parameters": [
+          { "in": "path", "name": "propertyId", "required": true, "schema": { "type": "string" } },
+          { "in": "query", "name": "period", "schema": { "type": "string", "enum": ["day", "week", "month"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consumption data",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/consumption/aggregate": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get aggregate consumption",
+        "responses": {
+          "200": {
+            "description": "Aggregate consumption",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/revenue/overview": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get revenue overview",
+        "responses": {
+          "200": {
+            "description": "Revenue overview",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/revenue/payments": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List payment statuses",
+        "parameters": [
+          { "in": "query", "name": "status", "schema": { "type": "string", "enum": ["paid", "pending", "overdue"] } },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payments list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/revenue/remind": {
+      "post": {
+        "tags": ["Provider"],
+        "summary": "Send payment reminder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "customerId": "user_001",
+                "billId": "bill_001",
+                "message": "Your payment is overdue."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reminder sent",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/tickets": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List provider tickets",
+        "parameters": [
+          { "in": "query", "name": "status", "schema": { "type": "string" } },
+          { "in": "query", "name": "priority", "schema": { "type": "string" } },
+          { "in": "query", "name": "category", "schema": { "type": "string" } },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/tickets/{ticketId}": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get ticket details",
+        "parameters": [
+          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Provider"],
+        "summary": "Update ticket",
+        "parameters": [
+          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "status": "in_progress",
+                "providerNotes": "Technician dispatched"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticket updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/tickets/{ticketId}/approve": {
+      "post": {
+        "tags": ["Provider"],
+        "summary": "Approve ticket resolution action",
+        "parameters": [
+          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "approvalAction": "dispatch_tech",
+                "providerNotes": "Dispatching technician"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticket approved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/tickets/{ticketId}/resolve": {
+      "post": {
+        "tags": ["Provider"],
+        "summary": "Resolve ticket",
+        "parameters": [
+          { "in": "path", "name": "ticketId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "providerNotes": "Issue fixed on-site",
+                "approvalAction": "none"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ticket resolved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/equipment": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List equipment",
+        "parameters": [
+          { "in": "query", "name": "status", "schema": { "type": "string" } },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Equipment list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/equipment/{equipmentId}": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "Get equipment details",
+        "parameters": [
+          { "in": "path", "name": "equipmentId", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Equipment details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/equipment/{equipmentId}/status": {
+      "patch": {
+        "tags": ["Provider"],
+        "summary": "Update equipment status",
+        "parameters": [
+          { "in": "path", "name": "equipmentId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "status": "NEEDS_ATTENTION",
+                "healthScore": 60
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Equipment updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/equipment/{equipmentId}/maintenance": {
+      "post": {
+        "tags": ["Provider"],
+        "summary": "Schedule equipment maintenance",
+        "parameters": [
+          { "in": "path", "name": "equipmentId", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "example": {
+                "nextMaintenanceDate": "2026-06-15",
+                "notes": "Scheduled quarterly inspection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Maintenance scheduled",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/alerts": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List provider alerts",
+        "parameters": [
+          { "in": "query", "name": "severity", "schema": { "type": "string" } },
+          { "in": "query", "name": "type", "schema": { "type": "string" } },
+          { "in": "query", "name": "dismissed", "schema": { "type": "boolean", "default": false } },
+          { "in": "query", "name": "page", "schema": { "type": "integer", "default": 1 } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alerts list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/alerts/{alertId}/dismiss": {
+      "patch": {
+        "tags": ["Provider"],
+        "summary": "Dismiss single alert",
+        "parameters": [
+          { "in": "path", "name": "alertId", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alert dismissed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/provider/alerts/dismiss-all": {
+      "patch": {
+        "tags": ["Provider"],
+        "summary": "Dismiss all alerts",
+        "parameters": [
+          { "in": "query", "name": "severity", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alerts dismissed",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/SuccessResponse" }

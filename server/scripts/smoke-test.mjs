@@ -39,6 +39,13 @@ function collectRouteOperations() {
     'maintenance.routes.ts': '/maintenance',
     'user.routes.ts': '/user',
     'ai.routes.ts': '/ai',
+    'provider.dashboard.routes.ts': '/provider',
+    'provider.installations.routes.ts': '/provider',
+    'provider.customers.routes.ts': '/provider',
+    'provider.revenue.routes.ts': '/provider',
+    'provider.tickets.routes.ts': '/provider',
+    'provider.equipment.routes.ts': '/provider',
+    'provider.alerts.routes.ts': '/provider',
   };
 
   const operations = new Set(['GET /health']);
@@ -145,6 +152,25 @@ async function main() {
 
   const adminToken = adminRegister.body?.data?.accessToken;
   const adminUserId = adminRegister.body?.data?.user?.id;
+
+  const executiveEmail = `smoke_exec_${Date.now()}@example.com`;
+  const executiveRegister = await callApi(
+    'auth.register.executive',
+    '/api/auth/register',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: executiveEmail,
+        password: 'password123',
+        name: 'Smoke Executive',
+        role: 'EXECUTIVE',
+      }),
+    },
+    [201],
+    'POST /auth/register',
+  );
+  const executiveToken = executiveRegister.body?.data?.accessToken;
 
   await callApi(
     'auth.login',
@@ -390,6 +416,237 @@ async function main() {
   const createdTicketId = supportTicket.body?.data?.ticketId;
   await callApi('support.tickets', '/api/support/tickets', { headers: { Authorization: `Bearer ${token}` } }, [200], 'GET /support/tickets');
 
+  const installationId = randomUUID();
+  await seedRow('seed.installations', 'installations', {
+    id: installationId,
+    property_id: propertyId,
+    service_title: 'Solar Energy',
+    customer_name: 'Smoke User Updated',
+    machine_name: 'Smoke Inverter 5kW',
+    machine_cost: 275000,
+    estimated_setup_days: 14,
+    status: 'SURVEY',
+    assigned_technician: null,
+    notes: 'Initial installation request',
+    subscription_plan_summary: { planName: 'Solar Rooftop Starter', totalMonthly: 3500 },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  const equipmentId = randomUUID();
+  await seedRow('seed.equipment', 'equipment', {
+    id: equipmentId,
+    installation_id: installationId,
+    name: 'Main Solar Inverter',
+    model: 'Growatt 5kW',
+    serial_number: `GW-${Date.now()}`,
+    status: 'ONLINE',
+    health_score: 95,
+    installed_date: new Date().toISOString(),
+    warranty_expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    last_maintenance_date: null,
+    next_maintenance_date: null,
+    customer_name: 'Smoke User Updated',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+
+  const providerAlertId = randomUUID();
+  await seedRow('seed.provider_alerts', 'provider_alerts', {
+    id: providerAlertId,
+    type: 'ticket',
+    severity: 'warning',
+    title: 'Smoke Provider Alert',
+    message: 'Provider alert seeded by smoke test',
+    related_id: createdTicketId,
+    dismissed: false,
+    created_at: new Date().toISOString(),
+  });
+
+  await callApi('provider.dashboard', '/api/provider/dashboard', { headers: { Authorization: `Bearer ${executiveToken}` } }, [200], 'GET /provider/dashboard');
+
+  await callApi(
+    'provider.installations.list',
+    '/api/provider/installations?page=1&limit=20',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/installations',
+  );
+  await callApi(
+    'provider.installations.pipeline',
+    '/api/provider/installations/pipeline',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/installations/pipeline',
+  );
+  await callApi(
+    'provider.installations.detail',
+    `/api/provider/installations/${installationId}`,
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/installations/{installationId}',
+  );
+  await callApi(
+    'provider.installations.update',
+    `/api/provider/installations/${installationId}/status`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'PROCUREMENT', notes: 'Smoke ordered equipment', assignedTechnician: 'Smoke Tech' }),
+    },
+    [200],
+    'PATCH /provider/installations/{installationId}/status',
+  );
+
+  await callApi(
+    'provider.customers.list',
+    '/api/provider/customers?search=smoke&page=1&limit=20',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/customers',
+  );
+  await callApi(
+    'provider.customers.consumption',
+    `/api/provider/customers/${propertyId}/consumption?period=day`,
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/customers/{propertyId}/consumption',
+  );
+  await callApi(
+    'provider.consumption.aggregate',
+    '/api/provider/consumption/aggregate',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/consumption/aggregate',
+  );
+
+  await callApi('provider.revenue.overview', '/api/provider/revenue/overview', { headers: { Authorization: `Bearer ${executiveToken}` } }, [200], 'GET /provider/revenue/overview');
+  await callApi(
+    'provider.revenue.payments',
+    '/api/provider/revenue/payments?page=1&limit=20',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/revenue/payments',
+  );
+  await callApi(
+    'provider.revenue.remind',
+    '/api/provider/revenue/remind',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerId: userId, billId, message: 'Smoke reminder for pending payment' }),
+    },
+    [200],
+    'POST /provider/revenue/remind',
+  );
+
+  await callApi(
+    'provider.tickets.list',
+    '/api/provider/tickets?page=1&limit=20',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/tickets',
+  );
+  await callApi(
+    'provider.tickets.detail',
+    `/api/provider/tickets/${createdTicketId}`,
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/tickets/{ticketId}',
+  );
+  await callApi(
+    'provider.tickets.update',
+    `/api/provider/tickets/${createdTicketId}`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'awaiting_approval', providerNotes: 'Smoke provider review in progress' }),
+    },
+    [200],
+    'PATCH /provider/tickets/{ticketId}',
+  );
+  await callApi(
+    'provider.tickets.approve',
+    `/api/provider/tickets/${createdTicketId}/approve`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approvalAction: 'dispatch_tech', providerNotes: 'Smoke dispatch approved' }),
+    },
+    [200],
+    'POST /provider/tickets/{ticketId}/approve',
+  );
+  await callApi(
+    'provider.tickets.resolve',
+    `/api/provider/tickets/${createdTicketId}/resolve`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerNotes: 'Smoke issue resolved', approvalAction: 'none' }),
+    },
+    [200],
+    'POST /provider/tickets/{ticketId}/resolve',
+  );
+
+  await callApi(
+    'provider.equipment.list',
+    '/api/provider/equipment?page=1&limit=20',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/equipment',
+  );
+  await callApi(
+    'provider.equipment.detail',
+    `/api/provider/equipment/${equipmentId}`,
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/equipment/{equipmentId}',
+  );
+  await callApi(
+    'provider.equipment.status',
+    `/api/provider/equipment/${equipmentId}/status`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'NEEDS_ATTENTION', healthScore: 60 }),
+    },
+    [200],
+    'PATCH /provider/equipment/{equipmentId}/status',
+  );
+  await callApi(
+    'provider.equipment.maintenance',
+    `/api/provider/equipment/${equipmentId}/maintenance`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${executiveToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nextMaintenanceDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), notes: 'Smoke maintenance schedule' }),
+    },
+    [200],
+    'POST /provider/equipment/{equipmentId}/maintenance',
+  );
+
+  await callApi(
+    'provider.alerts.list',
+    '/api/provider/alerts?dismissed=false&page=1&limit=20',
+    { headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'GET /provider/alerts',
+  );
+  await callApi(
+    'provider.alerts.dismiss',
+    `/api/provider/alerts/${providerAlertId}/dismiss`,
+    { method: 'PATCH', headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'PATCH /provider/alerts/{alertId}/dismiss',
+  );
+  await callApi(
+    'provider.alerts.dismiss-all',
+    '/api/provider/alerts/dismiss-all?severity=warning',
+    { method: 'PATCH', headers: { Authorization: `Bearer ${executiveToken}` } },
+    [200],
+    'PATCH /provider/alerts/dismiss-all',
+  );
+
   await seedRow('seed.service_history', 'service_history', {
     id: randomUUID(),
     property_id: propertyId,
@@ -507,6 +764,7 @@ async function main() {
 
   await callApi('auth.logout', '/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }, [200], 'POST /auth/logout');
   await callApi('auth.logout.admin', '/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } }, [200], 'POST /auth/logout');
+  await callApi('auth.logout.executive', '/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${executiveToken}` } }, [200], 'POST /auth/logout');
 
   const { data: dbUser, error: dbUserError } = await db.from('users').select('id,email').eq('id', userId).maybeSingle();
   if (dbUserError) {
