@@ -223,7 +223,7 @@ router.post(
     assertNoDbError(updateBillError);
 
     const { data: installation, error: installationError } = await db
-      .from('installations')
+      .from('installation_progress')
       .select('id')
       .eq('property_id', bill.property_id)
       .order('created_at', { ascending: false })
@@ -233,7 +233,7 @@ router.post(
 
     if (installation) {
       const { error: installationUpdateError } = await db
-        .from('installations')
+        .from('installation_progress')
         .update({ status: 'PROCUREMENT', updated_at: now })
         .eq('id', installation.id);
       assertNoDbError(installationUpdateError);
