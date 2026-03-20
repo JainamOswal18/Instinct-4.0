@@ -26,48 +26,78 @@ type ServiceCatalogItem = {
   imageId: string;
 };
 
-const getBenefits = (title: string) => {
-  const t = title.toLowerCase();
-  if (t.includes('audit')) return [
-    'Identify major energy hogs in your facility or home.',
-    'Get actionable recommendations to reduce bills by up to 20%.',
-    'Expert technician visit and detailed consumption report.'
-  ];
-  if (t.includes('hvac')) return [
-    'Cut cooling costs significantly during peak summer months.',
-    'Increase the lifespan of your A/C and ventilation systems.',
-    'Improve indoor air quality and overall comfort.'
-  ];
-  if (t.includes('inverter')) return [
-    'Optimize power backup duration based on your exact usage.',
-    'Prevent battery degradation from improper charging cycles.',
-    'Lower maintenance costs and reduce grid dependency.'
-  ];
-  if (t.includes('battery')) return [
-    'Early detection of battery issues before catastrophic failure.',
-    'Extend overall battery life by 1-2 years with proactive care.',
-    'Ensure 100% reliability during unexpected power cuts.'
-  ];
-  if (t.includes('solar')) return [
-    'Dramatically reduce or eliminate your electricity bills.',
-    'Increase your property value with permanent green infrastructure.',
-    'Hassle-free expansion handled from permits to installation.'
-  ];
-  return [
-    'Gain better energy efficiency and sustainability.',
-    'Lower your monthly operational costs.',
-    'Expert consultation and tailored solutions.'
-  ];
+function easeOutExp(x: number): number {
+  return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
+}
+
+const AnimatedNumber = ({ value }: { value: string }) => {
+  const [displayValue, setDisplayValue] = useState(value.replace(/\d/g, '0'));
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const duration = 2000;
+    
+    const numbersInString = Array.from(value.matchAll(/\d+/g)).map(m => ({
+      val: parseFloat(m[0]),
+      index: m.index!,
+      length: m[0].length
+    }));
+    
+    if (numbersInString.length === 0) {
+      setDisplayValue(value);
+      return;
+    }
+
+    let animationFrameId: number;
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      const easeProgress = easeOutExp(progress);
+      
+      let currentString = value;
+      for (let i = numbersInString.length - 1; i >= 0; i--) {
+        const num = numbersInString[i];
+        const currentNum = Math.floor(num.val * easeProgress);
+        currentString = currentString.slice(0, num.index) + currentNum + currentString.slice(num.index + num.length);
+      }
+      
+      setDisplayValue(currentString);
+      
+      if (progress < 1) {
+        animationFrameId = window.requestAnimationFrame(step);
+      }
+    };
+    
+    animationFrameId = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [value]);
+
+  return <span>{displayValue}</span>;
 };
 
-const getImageForService = (title: string) => {
+const getCostReduction = (title: string) => {
   const t = title.toLowerCase();
-  if (t.includes('audit')) return '/assets/lighting.jpg';
-  if (t.includes('hvac')) return '/assets/cooling.jpg';
-  if (t.includes('inverter')) return '/assets/lighting.jpg';
-  if (t.includes('battery')) return '/assets/battery-backup.jpg';
-  if (t.includes('solar')) return '/assets/solar.jpg';
-  return '/assets/solar.jpg';
+  
+  if (t.includes('solar')) return {
+    how: 'By generating your own electricity locally, you offset nearly your entire grid dependence and lock in low rates for decades.'
+  };
+  if (t.includes('hvac')) return {
+    how: 'By optimizing cooling cycles and reducing compressor workload during peak summer heat, significantly lowering massive AC consumption.'
+  };
+  if (t.includes('audit')) return {
+    how: 'By identifying hidden energy hogs, fixing power leaks, and providing actionable lifestyle and hardware adjustments.'
+  };
+  if (t.includes('inverter')) return {
+    how: 'By reducing charging conversion losses and maximizing the efficiency of your backup power to avoid peak-hour grid draws.'
+  };
+  if (t.includes('battery')) return {
+    title: 'Expected Cost Reduction',
+    how: 'By extending battery pack lifespan and slashing expensive replacement frequency through AI-driven preventative diagnostics.'
+  };
+  
+  return {
+    how: 'By comprehensively analyzing and upgrading your core electrical infrastructure to operate at maximum efficiency.'
+  };
 };
 
 const getEstimatedImpact = (title: string, consumptionStr: string) => {
@@ -337,8 +367,8 @@ export default function RequestServicePage() {
                       {getEstimatedImpact(service.title, consumption)?.sub}
                     </p>
                   </div>
-                  <div className="text-xl font-bold font-headline text-primary text-right">
-                    {getEstimatedImpact(service.title, consumption)?.value}
+                  <div className="text-xl font-bold font-headline text-primary text-right tabular-nums">
+                    <AnimatedNumber value={getEstimatedImpact(service.title, consumption)?.value || ''} />
                   </div>
                 </div>
               )}
@@ -471,36 +501,22 @@ export default function RequestServicePage() {
 
       {/* Benefits Card Below the form */}
       <Card className="overflow-hidden border-primary/20 shadow-lg">
-        <div className="flex flex-col md:flex-row">
-          <div className="relative md:w-2/5 aspect-video md:aspect-auto">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={getImageForService(service.title)} 
-              alt={`${service.title} benefits`}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-background/90 md:from-background/60 to-transparent flex items-end md:items-center p-6">
-              <h3 className="font-headline text-2xl font-bold text-white drop-shadow-md">
-                Why get this?
-              </h3>
+        <div className="flex flex-col">
+          <div className="p-8 w-full bg-card flex flex-col justify-center items-center text-center space-y-4">
+            <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full mb-2">
+              <CheckCircle2 className="h-8 w-8 text-primary" />
             </div>
-          </div>
-          <div className="p-6 md:w-3/5 bg-card flex flex-col justify-center">
-            <div className="space-y-4">
-              <h4 className="font-semibold text-lg text-primary flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5" />
-                Key Benefits
-              </h4>
-              <ul className="space-y-3">
-                {getBenefits(service.title).map((benefit, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground transition-colors hover:text-foreground">
-                    <div className="flex-shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary mt-0.5 shadow-md">
-                      <span className="text-xs font-bold">{i + 1}</span>
-                    </div>
-                    <span className="leading-snug pt-0.5">{benefit}</span>
-                  </li>
-                ))}
-              </ul>
+            <h4 className="font-headline text-xl md:text-2xl font-bold text-foreground">
+              {getCostReduction(service.title).title || 'Expected Cost Reduction'}
+            </h4>
+            <div className="text-5xl md:text-6xl font-black text-primary tracking-tighter drop-shadow-sm tabular-nums">
+              <AnimatedNumber value="30%" />
+            </div>
+            <div className="space-y-3 pt-2">
+               <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full uppercase tracking-wider">How it works</span>
+               <p className="text-muted-foreground max-w-sm mx-auto text-sm md:text-base leading-relaxed">
+                 {getCostReduction(service.title).how}
+               </p>
             </div>
           </div>
         </div>
