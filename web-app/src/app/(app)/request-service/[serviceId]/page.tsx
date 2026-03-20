@@ -26,6 +26,108 @@ type ServiceCatalogItem = {
   imageId: string;
 };
 
+const getBenefits = (title: string) => {
+  const t = title.toLowerCase();
+  if (t.includes('audit')) return [
+    'Identify major energy hogs in your facility or home.',
+    'Get actionable recommendations to reduce bills by up to 20%.',
+    'Expert technician visit and detailed consumption report.'
+  ];
+  if (t.includes('hvac')) return [
+    'Cut cooling costs significantly during peak summer months.',
+    'Increase the lifespan of your A/C and ventilation systems.',
+    'Improve indoor air quality and overall comfort.'
+  ];
+  if (t.includes('inverter')) return [
+    'Optimize power backup duration based on your exact usage.',
+    'Prevent battery degradation from improper charging cycles.',
+    'Lower maintenance costs and reduce grid dependency.'
+  ];
+  if (t.includes('battery')) return [
+    'Early detection of battery issues before catastrophic failure.',
+    'Extend overall battery life by 1-2 years with proactive care.',
+    'Ensure 100% reliability during unexpected power cuts.'
+  ];
+  if (t.includes('solar')) return [
+    'Dramatically reduce or eliminate your electricity bills.',
+    'Increase your property value with permanent green infrastructure.',
+    'Hassle-free expansion handled from permits to installation.'
+  ];
+  return [
+    'Gain better energy efficiency and sustainability.',
+    'Lower your monthly operational costs.',
+    'Expert consultation and tailored solutions.'
+  ];
+};
+
+const getImageForService = (title: string) => {
+  const t = title.toLowerCase();
+  if (t.includes('audit')) return '/assets/lighting.jpg';
+  if (t.includes('hvac')) return '/assets/cooling.jpg';
+  if (t.includes('inverter')) return '/assets/lighting.jpg';
+  if (t.includes('battery')) return '/assets/battery-backup.jpg';
+  if (t.includes('solar')) return '/assets/solar.jpg';
+  return '/assets/solar.jpg';
+};
+
+const getEstimatedImpact = (title: string, consumptionStr: string) => {
+  const c = Number(consumptionStr);
+  if (!c || c <= 0) return null;
+  
+  const t = title.toLowerCase();
+  
+  // 1 kWp solar = ~120 kWh/month generation in typical Indian conditions.
+  if (t.includes('solar')) {
+    const kw = Math.max(1, Math.round((c / 120) * 10) / 10);
+    return {
+      label: 'Target System Size',
+      value: `${kw} kWp`,
+      sub: `Offsets ~100% of your ${c} kWh usage`
+    };
+  }
+  
+  // HVAC takes ~40-50% of home energy. Tuning saves ~20% of HVAC = ~8-10% of total.
+  if (t.includes('hvac')) {
+    const savings = Math.round(c * 0.10);
+    return {
+      label: 'Est. Cooling Savings',
+      value: `~${savings} kWh/mo`,
+      sub: 'Based on 10% average total efficiency gain'
+    };
+  }
+  
+  // Energy Audit usually uncovers 15-20% waste
+  if (t.includes('audit')) {
+    const savings = Math.round(c * 0.15);
+    return {
+      label: 'Potential Waste Identified',
+      value: `~${savings} kWh/mo`,
+      sub: 'Based on typical 15% home energy waste'
+    };
+  }
+
+  // Smart Inverter saves ~5% from better charging/discharging logic
+  if (t.includes('inverter')) {
+    const savings = Math.round(c * 0.05);
+    return {
+      label: 'Est. Efficiency Gain',
+      value: `~${savings} kWh/mo`,
+      sub: 'Reduced conversion & charging loss'
+    };
+  }
+
+  // Battery health extends life, doesn't directly save kWh.
+  if (t.includes('battery')) {
+    return {
+      label: 'Est. Battery Life Extension',
+      value: '+20-30%',
+      sub: 'With regular proactive health diagnostics'
+    };
+  }
+
+  return null;
+};
+
 export default function RequestServicePage() {
   const params = useParams();
   const router = useRouter();
@@ -223,6 +325,23 @@ export default function RequestServicePage() {
                 onChange={(e) => setConsumption(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">Find this on your most recent utility bill.</p>
+              
+              {/* Dynamic Algorithm Output */}
+              {getEstimatedImpact(service.title, consumption) && (
+                <div className="mt-3 p-4 bg-primary/10 rounded-lg border border-primary/20 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-primary">
+                      {getEstimatedImpact(service.title, consumption)?.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {getEstimatedImpact(service.title, consumption)?.sub}
+                    </p>
+                  </div>
+                  <div className="text-xl font-bold font-headline text-primary text-right">
+                    {getEstimatedImpact(service.title, consumption)?.value}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -348,6 +467,43 @@ export default function RequestServicePage() {
             </Button>
           </form>
         </CardContent>
+      </Card>
+
+      {/* Benefits Card Below the form */}
+      <Card className="overflow-hidden border-primary/20 shadow-lg">
+        <div className="flex flex-col md:flex-row">
+          <div className="relative md:w-2/5 aspect-video md:aspect-auto">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={getImageForService(service.title)} 
+              alt={`${service.title} benefits`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-background/90 md:from-background/60 to-transparent flex items-end md:items-center p-6">
+              <h3 className="font-headline text-2xl font-bold text-white drop-shadow-md">
+                Why get this?
+              </h3>
+            </div>
+          </div>
+          <div className="p-6 md:w-3/5 bg-card flex flex-col justify-center">
+            <div className="space-y-4">
+              <h4 className="font-semibold text-lg text-primary flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5" />
+                Key Benefits
+              </h4>
+              <ul className="space-y-3">
+                {getBenefits(service.title).map((benefit, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <div className="flex-shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary mt-0.5 shadow-md">
+                      <span className="text-xs font-bold">{i + 1}</span>
+                    </div>
+                    <span className="leading-snug pt-0.5">{benefit}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );
