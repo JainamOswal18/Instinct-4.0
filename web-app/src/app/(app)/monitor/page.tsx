@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import EnergyChatbot from '@/components/dashboard/energy-chatbot';
 import {
   getSubscribedEnergies,
   getHourlyConsumption,
@@ -216,6 +217,14 @@ export default function MonitorPage() {
           })}
         </div>
       )}
+
+      {/* AI Energy Advisor Chatbot */}
+      <EnergyChatbot
+        subscribedEnergies={subscribed}
+        totalConsumption={totalConsumption}
+        avgDailyUsage={avgDaily}
+        peakService={peakService}
+      />
 
       {/* Detail Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
