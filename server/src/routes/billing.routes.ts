@@ -665,7 +665,54 @@ router.post(
       await db.from('bills').update({ status: 'accepted' }).eq('id', draft.bill_id);
     }
 
+    // Notify the provider (executive) who created this draft
+    const { data: draftFull, error: draftFullError } = await db
+      .from('provider_billing_drafts')
+      .select('provider_user_id, title')
+      .eq('id', draftId)
+      .maybeSingle();
+
+    if (!draftFullError && draftFull?.provider_user_id) {
+      const { data: userInfo } = await db
+        .from('users')
+        .select('name')
+        .eq('id', authReq.user!.userId)
+        .maybeSingle();
+      const customerName = (userInfo as any)?.name || 'The customer';
+      const planTitle = draftFull.title || 'the billing plan';
+
+      // Notification for the provider
+      await db.from('notifications').insert({
+        id: randomUUID(),
+        user_id: draftFull.provider_user_id,
+        type: 'payment_accepted',
+        title: 'Billing Plan Accepted',
+        message: `${customerName} has accepted "${planTitle}" and confirmed their payment. Check Billing Review for details.`,
+        route: '/provider-billing',
+        read: false,
+        dismissible: true,
+        persistent: false,
+        created_at: now,
+      });
+
+      // Alert entry so it appears in provider Alerts section
+      await db.from('provider_alerts').insert({
+        id: randomUUID(),
+        provider_user_id: draftFull.provider_user_id,
+        type: 'payment_received',
+        severity: 'info',
+        title: 'Payment Accepted — ' + planTitle,
+        message: `${customerName} has accepted and confirmed payment for "${planTitle}".`,
+        related_id: draftId,
+        dismissed: false,
+        created_at: now,
+      }).catch(() => {
+        // provider_alerts table may not exist in all envs — fail silently
+      });
+    }
+
     sendSuccess(res, { draftId, billId: draft.bill_id, status: 'accepted', acceptedAt: now });
+
   }),
 );
 
