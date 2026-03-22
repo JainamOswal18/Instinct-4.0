@@ -125,3 +125,50 @@ export async function fetchSupportFaqs() {
     faqs: Array<{ id: string; question: string; answer: string }>;
   }>('/support/faqs');
 }
+
+// ── Billing Drafts (real API) ─────────────────────────────────
+
+export type ApiDraft = {
+  draftId: string;
+  billId: string | null;
+  propertyId: string;
+  title: string;
+  description: string | null;
+  lineItems: Record<string, unknown>[];
+  charges: { subscriptionFee: number; usageCharge: number; taxes: number };
+  totalAmount: number;
+  status: 'sent' | 'accepted' | 'disputed';
+  sentAt: string | null;
+  acceptedAt: string | null;
+  disputedAt: string | null;
+  createdAt: string;
+  dueDate: string | null;
+  generatedAt: string | null;
+  billStatus: string | null;
+};
+
+export async function fetchMyBillingDrafts() {
+  return customerGet<{ drafts: ApiDraft[] }>('/billing/my-drafts');
+}
+
+export async function acceptBillingDraft(draftId: string) {
+  const token = requireToken();
+  const response = await apiRequest<{ draftId: string; status: string; acceptedAt: string }>(
+    `/billing/my-drafts/${draftId}/accept`,
+    { method: 'POST', body: '{}' },
+    token,
+  );
+  if (!response.success) throw new Error(response.message || 'Request failed');
+  return response.data!;
+}
+
+export async function disputeBillingDraft(draftId: string, reason: string) {
+  const token = requireToken();
+  const response = await apiRequest<{ draftId: string; status: string; disputedAt: string }>(
+    `/billing/my-drafts/${draftId}/dispute`,
+    { method: 'POST', body: JSON.stringify({ reason }) },
+    token,
+  );
+  if (!response.success) throw new Error(response.message || 'Request failed');
+  return response.data!;
+}

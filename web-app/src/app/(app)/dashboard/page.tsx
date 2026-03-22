@@ -76,6 +76,135 @@ function resolveServiceImage(service: ServiceCatalogItem): string {
   return service.imageId;
 }
 
+function AutoProgressBenefits() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+
+  const steps = [
+    {
+      title: "Algorithmic Load Shifting Matrix",
+      description: "When state power grid tariffs surge during peak daylight hours (12 PM - 4 PM), your integrated Smart Battery system automatically cuts off the grid draw entirely. Your house dynamically pulls 100% of its stored power via AI algorithms—mathematically guaranteeing you systematically avoid paying extreme surge-pricing rates.",
+      icon: TrendingDown,
+      color: "bg-green-500",
+      textColor: "text-green-500",
+      image: "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&w=800&q=80" // Verified tech architecture photo
+    },
+    {
+      title: "State Subsidies & Net Metering",
+      description: "By heavily investing in our top-tier integrations, you aggressively trigger specific state/federal 'Green Energy' rebate programs. Furthermore, if you generate more electricity than you consume, the surplus electricity physically pumps backward into the public grid, forcing the government to pay you.",
+      icon: Cpu,
+      color: "bg-blue-500",
+      textColor: "text-blue-500",
+      image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&w=800&q=80" // Large scale sunny solar field
+    },
+    {
+      title: "Hardware Longevity & Diagnostics",
+      description: "Every piece of advanced hardware connects flawlessly into Instinct 4.0 natively, scanning telemetry 24/7. When solar cells perform sub-optimally, the system automatically detects voltage drops, intercepts failure data, and deploys maintenance workers directly to your roof—drastically reducing failure risks by 97%.",
+      icon: ShieldCheck,
+      color: "bg-amber-500",
+      textColor: "text-amber-500",
+      image: "https://images.unsplash.com/photo-1497440001374-f26997328c1b?auto=format&w=800&q=80" // Technical energy architecture
+    }
+  ];
+
+  useEffect(() => {
+    // 1% every 50ms results in 5 seconds per fully completed card loop
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          setActiveIndex((idx) => (idx + 1) % steps.length);
+          return 0;
+        }
+        return prev + 1;
+      });
+    }, 50);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="mt-10 space-y-6">
+      <div className="flex flex-col mb-4">
+         <h3 className="text-2xl font-bold font-headline flex items-center gap-2">
+            <ClipboardCheck className="h-6 w-6 text-primary" />
+            The Power Process
+         </h3>
+         <p className="text-muted-foreground mt-1 text-base">
+            Our specialized workflow visualizes exactly how your infrastructure physically transitions into the modern grid.
+         </p>
+      </div>
+
+      {/* Desktop / Tablet Animated Horizontal Accordion */}
+      <div className="hidden md:flex gap-4 h-[400px]">
+        {steps.map((step, idx) => {
+          const isActive = activeIndex === idx;
+          const isPast = idx < activeIndex; 
+          return (
+            <div 
+              key={idx}
+              onMouseEnter={() => { setActiveIndex(idx); setProgress(0); }}
+              className={`relative overflow-hidden rounded-2xl border transition-all duration-700 ease-in-out flex flex-col justify-end bg-card ` + (isActive ? 'w-[60%] shadow-lg border-primary/40 group' : 'w-[20%] shadow-sm border-border hover:bg-muted/30')}
+            >
+              <div className="absolute inset-0 z-0 bg-black overflow-hidden rounded-2xl">
+                <Image unoptimized src={step.image} alt={step.title} fill className={`object-cover transition-all duration-1000 ${isActive ? 'brightness-[0.7] scale-105' : 'brightness-[0.3] scale-100'}`} />
+              </div>
+
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-muted/60 z-20">
+                <div 
+                  className={`h-full ${step.color} transition-all ease-linear`}
+                  style={{ width: isActive ? `${progress}%` : (isPast ? '100%' : '0%') }}
+                />
+              </div>
+
+              <div className={`z-10 bg-gradient-to-t from-background via-background/80 to-transparent p-6 h-full flex flex-col justify-end transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-80'}`}>
+                 <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl font-black text-muted-foreground/30">0{idx + 1}</span>
+                    <step.icon className={`h-6 w-6 ${isActive ? step.textColor : 'text-muted-foreground'} transition-colors`} />
+                 </div>
+                 
+                 <h4 className={`text-lg font-bold font-headline truncate ${isActive ? step.textColor : 'text-foreground'}`}>
+                   {step.title}
+                 </h4>
+
+                 <div className={`grid transition-all duration-500 ease-in-out ${isActive ? 'grid-rows-[1fr] mt-3 opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                   <div className="overflow-hidden">
+                     <p className="text-sm text-foreground/80 leading-relaxed font-medium pb-2">
+                       {step.description}
+                     </p>
+                   </div>
+                 </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Mobile Fully Stacked Vertical Blocks */}
+      <div className="flex md:hidden flex-col gap-6">
+        {steps.map((step, idx) => (
+          <div key={idx} className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className={`absolute top-0 left-0 bottom-0 w-1.5 z-20 ${step.color}`} />
+            <div className="p-6">
+               <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl font-black text-muted-foreground/30">0{idx + 1}</span>
+                  <step.icon className={`h-6 w-6 ${step.textColor}`} />
+               </div>
+               <h4 className={`text-lg font-bold font-headline mb-3 ${step.textColor}`}>
+                 {step.title}
+               </h4>
+               <p className="text-sm text-foreground/80 leading-relaxed font-medium">
+                 {step.description}
+               </p>
+               <div className="relative h-48 w-full rounded-lg mt-4 overflow-hidden shadow-sm bg-black">
+                 <Image unoptimized src={step.image} alt={step.title} fill className="object-cover brightness-[0.7]" />
+               </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ========================================
 // USER DASHBOARD
 // ========================================
@@ -286,6 +415,73 @@ function UserDashboard() {
           })}
         </div>
       </div>
+
+      {/* ====== User Benefits Section ====== */}
+      <div className="space-y-4 pt-6">
+        <h2 className="text-xl font-bold font-headline flex items-center gap-2">
+          <TrendingDown className="h-6 w-6 text-green-500" />
+          Why Upgrade?
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          Optimize your consumption dynamically and mathematically guarantee drops in overhead costs.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+          <Card className="border-green-500/30 bg-green-50/50 shadow-sm relative overflow-hidden">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 pointer-events-none">
+              <IndianRupee className="w-32 h-32 text-green-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 text-green-600" />
+                Cost Reduction
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-extrabold text-green-600 mb-2">~30%</p>
+              <p className="text-sm text-foreground/80">
+                Average monthly bill drop after installing our solar array plus smart battery.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-blue-500/30 bg-blue-50/50 shadow-sm relative overflow-hidden">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 pointer-events-none">
+              <Zap className="w-32 h-32 text-blue-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <Cpu className="h-5 w-5 text-blue-600" />
+                Smart Consumption
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-extrabold text-blue-600 mb-2">24/7</p>
+              <p className="text-sm text-foreground/80">
+                AI load-shifting ensures you charge batteries exclusively when grid costs hit absolute minimums.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-amber-500/30 bg-amber-50/50 shadow-sm relative overflow-hidden">
+            <div className="absolute -top-4 -right-4 p-4 opacity-10 pointer-events-none">
+              <ShieldCheck className="w-32 h-32 text-amber-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-amber-600" />
+                Future Proofing
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-extrabold text-amber-600 mb-2">100%</p>
+              <p className="text-sm text-foreground/80">
+                Total immunity from incoming state grid blackouts and unexpected surge pricing events.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
     </div>
   );
 }

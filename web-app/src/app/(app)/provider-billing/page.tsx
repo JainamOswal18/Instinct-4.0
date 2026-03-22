@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,22 +16,110 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  getBillingDrafts,
-  approveBillingDraft,
-  addUserNotification,
-  type BillingDraft,
-  type BillingPlan,
-} from '@/lib/notifications';
+import { fetchProviderBillingDrafts } from '@/lib/provider-api';
+import { addUserNotification, type BillingPlan } from '@/lib/notifications';
 import {
   FileText, Edit3, CheckCircle, Send, Sparkles, IndianRupee,
   Zap, Wrench, ShieldCheck, Cpu, TrendingDown, CalendarClock,
-  Plus, Trash2, User, Clock,
+  Plus, Trash2, User, Clock, RefreshCw,
 } from 'lucide-react';
+
+// ── Adapter to convert the real API draft shape into the UI shape ──
+type ApiBillingDraft = {
+  id: string;
+  propertyId: string;
+  title: string;
+  description: string | null;
+  lineItems: Array<Record<string, unknown>>;
+  charges: { subscriptionFee: number; usageCharge: number; taxes: number };
+  totalAmount: number;
+  status: string;
+  sentAt: string | null;
+  acceptedAt: string | null;
+  disputedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// We reconstruct a BillingDraft-compatible object so the existing UI renders
+type BillingDraft = {
+  id: string;
+  requestId: string;
+  serviceTitle: string;
+  consumption: string;
+  areaDescription: string;
+  fileNames: string[];
+  customerName: string;
+  generatedPlan: BillingPlan;
+  status: 'draft' | 'provider-approved' | 'user-accepted' | 'user-disputed';
+  createdAt: string;
+  approvedAt?: string;
+  userRespondedAt?: string;
+  disputeReason?: string;
+};
+
+function apiStatusToUiStatus(status: string): BillingDraft['status'] {
+  switch (status) {
+    case 'sent': return 'provider-approved';
+    case 'accepted': return 'user-accepted';
+    case 'disputed': return 'user-disputed';
+    case 'draft': return 'draft';
+    default: return 'provider-approved';
+  }
+}
+
+function adaptApiDraft(d: ApiBillingDraft): BillingDraft {
+  // Try to parse BillingPlan from lineItems or reconstruct from charges
+  let generatedPlan: BillingPlan = {
+    planName: d.title,
+    summary: d.description || '',
+    installationCost: d.charges?.usageCharge || 0,
+    monthlyServiceCharge: d.charges?.subscriptionFee || 0,
+    maintenanceFee: d.charges?.taxes || 0,
+    totalMonthly: d.totalAmount,
+    estimatedMonthlySavings: 0,
+    paybackPeriodMonths: 0,
+    features: [],
+    specifications: { systemCapacity: '', expectedGeneration: '', warrantyPeriod: '', equipmentDetails: '' },
+    rationale: '',
+    customCharges: [],
+  };
+
+  // Reconstruct rich plan data from lineItems if provider stored them there
+  for (const item of d.lineItems || []) {
+    if (item.type === 'features' && Array.isArray(item.values)) {
+      generatedPlan.features = item.values as string[];
+    } else if (item.type === 'specifications' && item.values && typeof item.values === 'object') {
+      generatedPlan.specifications = item.values as BillingPlan['specifications'];
+    } else if (item.type === 'rationale' && typeof item.value === 'string') {
+      generatedPlan.rationale = item.value;
+    } else if (item.type === 'customCharges' && Array.isArray(item.values)) {
+      generatedPlan.customCharges = item.values as BillingPlan['customCharges'];
+    } else if (item.type === 'plan' && item.value && typeof item.value === 'object') {
+      generatedPlan = { ...generatedPlan, ...(item.value as Partial<BillingPlan>) };
+    }
+  }
+
+  return {
+    id: d.id,
+    requestId: '',
+    serviceTitle: d.title,
+    consumption: '',
+    areaDescription: '',
+    fileNames: [],
+    customerName: 'Customer',
+    generatedPlan,
+    status: apiStatusToUiStatus(d.status),
+    createdAt: d.createdAt,
+    approvedAt: d.sentAt || undefined,
+    userRespondedAt: d.acceptedAt || d.disputedAt || undefined,
+  };
+}
 
 export default function ProviderBillingPage() {
   const { toast } = useToast();
   const [drafts, setDrafts] = useState<BillingDraft[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<BillingDraft | null>(null);
   const [editPlan, setEditPlan] = useState<BillingPlan | null>(null);
   const [showEditor, setShowEditor] = useState(false);
@@ -39,13 +127,23 @@ export default function ProviderBillingPage() {
   const [newChargeAmount, setNewChargeAmount] = useState('');
   const [newChargeRecurring, setNewChargeRecurring] = useState(true);
 
-  useEffect(() => {
-    loadDrafts();
+  const loadDrafts = useCallback(async () => {
+    try {
+      const result = await fetchProviderBillingDrafts();
+      setDrafts((result.drafts as ApiBillingDraft[]).map(adaptApiDraft));
+    } catch (err) {
+      console.error('Failed to load billing drafts:', err);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const loadDrafts = () => {
-    setDrafts(getBillingDrafts());
-  };
+  useEffect(() => {
+    loadDrafts();
+    // Poll every 15s so the page auto-updates when user accepts
+    const interval = setInterval(loadDrafts, 15000);
+    return () => clearInterval(interval);
+  }, [loadDrafts]);
 
   const openEditor = (draft: BillingDraft) => {
     setSelectedDraft(draft);
@@ -106,14 +204,14 @@ export default function ProviderBillingPage() {
     setEditPlan({ ...editPlan, totalMonthly: base + customRecurring });
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedDraft || !editPlan) return;
     // Recalculate total before approving
     const base = (editPlan.monthlyServiceCharge || 0) + (editPlan.maintenanceFee || 0);
     const customRecurring = (editPlan.customCharges || []).filter(c => c.recurring).reduce((s, c) => s + c.amount, 0);
     const finalPlan = { ...editPlan, totalMonthly: base + customRecurring };
 
-    approveBillingDraft(selectedDraft.id, finalPlan);
+    // Notify the user via localStorage notification (instant, no API needed)
     addUserNotification(
       `Great news! Your custom billing plan for "${selectedDraft.serviceTitle}" is ready. Visit the Billing section to review and accept your plan.`,
       'billing-ready'
@@ -121,9 +219,9 @@ export default function ProviderBillingPage() {
     setShowEditor(false);
     setSelectedDraft(null);
     setEditPlan(null);
-    loadDrafts();
+    await loadDrafts();
     toast({
-      title: 'Bill Approved & Sent',
+      title: 'Bill Sent to Customer',
       description: `${selectedDraft.customerName} has been notified about their billing plan.`,
     });
   };
@@ -132,13 +230,14 @@ export default function ProviderBillingPage() {
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
   const pendingDrafts = drafts.filter(d => d.status === 'draft');
-  const approvedDrafts = drafts.filter(d => d.status !== 'draft');
+  const approvedDrafts = drafts.filter(d => d.status !== 'draft' && d.status !== 'provider-approved');
+  const sentDrafts = drafts.filter(d => d.status === 'provider-approved');
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft': return <Badge variant="outline" className="text-amber-500 border-amber-500/30"><Clock className="h-3 w-3 mr-1" />Pending Review</Badge>;
       case 'provider-approved': return <Badge className="bg-blue-500/20 text-blue-400"><Send className="h-3 w-3 mr-1" />Sent to Customer</Badge>;
-      case 'user-accepted': return <Badge className="bg-green-500/20 text-green-400"><CheckCircle className="h-3 w-3 mr-1" />Accepted</Badge>;
+      case 'user-accepted': return <Badge className="bg-green-500/20 text-green-400"><CheckCircle className="h-3 w-3 mr-1" />Accepted ✓</Badge>;
       case 'user-disputed': return <Badge variant="destructive"><FileText className="h-3 w-3 mr-1" />Disputed</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
@@ -146,9 +245,15 @@ export default function ProviderBillingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold font-headline">Billing Review</h1>
-        <p className="text-muted-foreground">Review AI-generated billing drafts, edit, and approve before sending to customers.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold font-headline">Billing Review</h1>
+          <p className="text-muted-foreground">Review AI-generated billing drafts, edit, and approve before sending to customers.</p>
+        </div>
+        <Button variant="outline" size="sm" className="gap-2" onClick={loadDrafts} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* === Pending Drafts === */}
@@ -203,17 +308,17 @@ export default function ProviderBillingPage() {
         )}
       </div>
 
-      {/* === Approved / Processed === */}
-      {approvedDrafts.length > 0 && (
+      {/* === Awaiting User Response (Sent) === */}
+      {sentDrafts.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Sent Bills ({approvedDrafts.length})</h2>
+          <h2 className="text-xl font-semibold">Awaiting Customer Response ({sentDrafts.length})</h2>
           <div className="grid gap-3">
-            {approvedDrafts.map(draft => (
-              <Card key={draft.id}>
+            {sentDrafts.map(draft => (
+              <Card key={draft.id} className="border-blue-500/20">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                      <FileText className="h-5 w-5 text-primary" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10">
+                      <FileText className="h-5 w-5 text-blue-500" />
                     </div>
                     <div>
                       <p className="font-medium">{draft.generatedPlan.planName}</p>
@@ -224,6 +329,39 @@ export default function ProviderBillingPage() {
                     <div className="text-right">
                       <p className="font-semibold">{formatINR(draft.generatedPlan.totalMonthly)}/mo</p>
                       <p className="text-xs text-muted-foreground">{draft.approvedAt ? new Date(draft.approvedAt).toLocaleDateString() : ''}</p>
+                    </div>
+                    {getStatusBadge(draft.status)}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* === Responded (Accepted / Disputed) === */}
+      {approvedDrafts.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Customer Responses ({approvedDrafts.length})</h2>
+          <div className="grid gap-3">
+            {approvedDrafts.map(draft => (
+              <Card key={draft.id} className={draft.status === 'user-accepted' ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30'}>
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${draft.status === 'user-accepted' ? 'bg-green-500/15' : 'bg-destructive/10'}`}>
+                      {draft.status === 'user-accepted'
+                        ? <CheckCircle className="h-5 w-5 text-green-500" />
+                        : <FileText className="h-5 w-5 text-destructive" />}
+                    </div>
+                    <div>
+                      <p className="font-medium">{draft.generatedPlan.planName}</p>
+                      <p className="text-sm text-muted-foreground">{draft.customerName} — {draft.serviceTitle}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-semibold">{formatINR(draft.generatedPlan.totalMonthly)}/mo</p>
+                      <p className="text-xs text-muted-foreground">{draft.userRespondedAt ? new Date(draft.userRespondedAt).toLocaleDateString() : ''}</p>
                     </div>
                     {getStatusBadge(draft.status)}
                   </div>
