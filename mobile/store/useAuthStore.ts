@@ -2,10 +2,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-<<<<<<< HEAD
 import apiWrapper from '../services/apiWrapper';
-=======
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
 // ========== TYPES ==========
 
@@ -109,11 +106,9 @@ const defaultProperty = (): Property => ({
   createdAt: new Date().toISOString(),
 });
 
-// Persist under a user-specific key so multiple accounts on one device don't collide
 const saveUserData = (user: User): Promise<void> =>
   AsyncStorage.setItem(`user_${user.id}`, JSON.stringify(user));
 
-// Merge only backend-owned scalars — never clobber local properties/currentPropertyId
 function mergeBackendScalars(existing: User, backendUser: Partial<User>): User {
   return {
     ...existing,
@@ -132,7 +127,6 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  // ⭐ phone is optional — register.tsx passes it, api.ts accepts it
   register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -144,13 +138,10 @@ interface AuthState {
   saveSurveyData: (propertyId: string, surveyData: SurveyData) => void;
   saveProposal: (propertyId: string, proposal: ProposedPlan) => void;
   updateInstallationProgress: (propertyId: string, progress: Partial<InstallationProgress>) => void;
-<<<<<<< HEAD
 
   // ⭐ Polling helpers — called by useStatusSync every 30s
   syncProperties: () => Promise<void>;
   syncInstallationProgress: (propertyId: string) => Promise<void>;
-=======
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -161,25 +152,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ========== REGISTER ==========
   register: async (name, email, password, phone) => {
     try {
-<<<<<<< HEAD
       const response = await api.auth.register(name, email, password, phone, 'CITIZEN');
-=======
-      const response = await api.auth.register(name, email, password, phone);
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
       if (!response.success) {
         throw new Error(response.error?.message || response.message || 'Registration failed');
       }
 
-      // Backend returns `accessToken` — guard against old field name just in case
       const token = response.data.accessToken ?? response.data.token;
       if (!token) throw new Error('No access token received from server');
       await AsyncStorage.setItem('accessToken', token);
 
-<<<<<<< HEAD
       const backendUser = response.data.user;
 
-      // Fetch real properties from backend (may be empty for new user)
       let properties: Property[] = [];
       let currentPropertyId: string | null = null;
       try {
@@ -196,10 +180,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           currentPropertyId = properties[0].id;
         }
       } catch {
-        // No properties yet — that's fine for a new user
+        // No properties yet — fine for new user
       }
 
-      // If no backend properties, create a default one on the backend
       if (!properties.length) {
         try {
           const addRes = await api.user.addProperty('My Property', '', 'residential');
@@ -216,7 +199,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             currentPropertyId = properties[0].id;
           }
         } catch {
-          // Fallback to local-only property
           properties = [defaultProperty()];
           currentPropertyId = 'default_property';
         }
@@ -230,16 +212,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         createdAt: backendUser.createdAt ?? new Date().toISOString(),
         properties,
         currentPropertyId,
-=======
-      const user: User = {
-        id: response.data.user.id,
-        name: response.data.user.name,
-        email: response.data.user.email,
-        role: response.data.user.role ?? 'CITIZEN',
-        createdAt: response.data.user.createdAt ?? new Date().toISOString(),
-        properties: [defaultProperty()],
-        currentPropertyId: 'default_property',
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
       };
 
       await saveUserData(user);
@@ -260,14 +232,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         throw new Error(response.error?.message || response.message || 'Login failed');
       }
 
-      // Backend returns `accessToken` — guard against old field name just in case
       const token = response.data.accessToken ?? response.data.token;
       if (!token) throw new Error('No access token received from server');
       await AsyncStorage.setItem('accessToken', token);
 
       const backendUser = response.data.user;
 
-      // Restore locally-saved data for this user if it exists (preserves survey/property state)
       const savedUserJson = await AsyncStorage.getItem(`user_${backendUser.id}`);
       let user: User;
 
@@ -288,15 +258,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('✅ Created new user data for:', user.name);
       }
 
-<<<<<<< HEAD
-      // Fetch real properties from backend and merge — this ensures subscriptionStatus
-      // is always up-to-date and local IDs match backend IDs
       try {
         const propsRes = await api.user.getProperties();
         if (propsRes?.success && propsRes.data?.properties?.length) {
           const backendProps: any[] = propsRes.data.properties;
-
-          // Build merged property list: prefer backend data, keep local survey/proposal/installation data
           const mergedProperties: Property[] = backendProps.map((bp: any) => {
             const local = user.properties.find(lp => lp.id === bp.id);
             return {
@@ -306,14 +271,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               type: bp.type,
               subscriptionStatus: (bp.subscriptionStatus ?? 'NONE') as SubscriptionStatus,
               createdAt: bp.createdAt,
-              // Preserve local-only data
               surveyData: local?.surveyData,
               proposedPlan: local?.proposedPlan,
               installationProgress: local?.installationProgress,
             };
           });
 
-          // If local had a default_property with survey data, try to preserve it
           const localDefault = user.properties.find(p => p.id === 'default_property');
           if (localDefault?.surveyData && mergedProperties.length > 0 && !mergedProperties[0].surveyData) {
             mergedProperties[0] = { ...mergedProperties[0], surveyData: localDefault.surveyData };
@@ -329,8 +292,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.warn('[login] Could not fetch backend properties:', e);
       }
 
-=======
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
       await saveUserData(user);
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
@@ -347,7 +308,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Only remove the token — keep user_* data so survey/property state survives re-login
       await AsyncStorage.removeItem('accessToken');
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
@@ -385,15 +345,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             };
           }
 
-<<<<<<< HEAD
-          // Sync real properties from backend on every app start
           try {
             const propsRes = await api.user.getProperties();
             if (propsRes?.success && propsRes.data?.properties?.length) {
               const backendProps: any[] = propsRes.data.properties;
               const mergedProperties: Property[] = backendProps.map((bp: any) => {
                 const local = user.properties.find(lp => lp.id === bp.id);
-                // Also check if local has default_property with data to migrate
                 const localDefault = user.properties.find(lp => lp.id === 'default_property');
                 return {
                   id: bp.id,
@@ -416,14 +373,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // Non-critical — use cached properties
           }
 
-=======
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
           await saveUserData(user);
           set({ user, isAuthenticated: true, isLoading: false });
           return;
         }
       } catch {
-        // Token invalid — clear it
         await AsyncStorage.removeItem('accessToken');
       }
 
@@ -507,11 +461,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     saveUserData(updatedUser);
     set({ user: updatedUser });
   },
-<<<<<<< HEAD
 
   // ── SYNC PROPERTIES (called by useStatusSync every 30s) ──────────────────
-  // Fetches /user/properties from backend and merges subscriptionStatus +
-  // proposedPlan into local state so navigation reacts to provider actions.
   syncProperties: async () => {
     const user = get().user;
     if (!user) return;
@@ -525,7 +476,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       let changed = false;
 
-      // Handle migration: if local has only 'default_property', adopt backend IDs
       const hasOnlyDefault = user.properties.length === 1 && user.properties[0].id === 'default_property';
       if (hasOnlyDefault) {
         const localDefault = user.properties[0];
@@ -564,11 +514,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await saveUserData(updatedUser);
       set({ user: updatedUser });
 
-      // If any property just became PLAN_PROPOSED and has no local proposal, fetch it
       for (const prop of updatedProperties) {
         if (prop.subscriptionStatus === 'PLAN_PROPOSED' && !prop.proposedPlan) {
           try {
-            // Try fetching proposal by property ID
             const proposalRes = await api.subscription.getProposalByProperty(prop.id);
             if (proposalRes?.success && proposalRes.data) {
               const d = proposalRes.data;
@@ -598,6 +546,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             console.warn('[syncProperties] Could not fetch proposal for', prop.id, e);
           }
         }
+
+        // When status becomes ACTIVE, fetch final installation progress so
+        // the progress screen shows fully complete before routing to dashboard
+        if (prop.subscriptionStatus === 'ACTIVE') {
+          try {
+            const progressRes = await api.installation.getProgress(prop.id);
+            if (progressRes?.success && progressRes.data) {
+              const r = progressRes.data.progress ?? progressRes.data;
+              const finalProgress: InstallationProgress = {
+                paymentConfirmed:    r.paymentConfirmed    ?? true,
+                engineerAssigned:    r.engineerAssigned    ?? true,
+                engineerName:        r.engineerName,
+                engineerPhone:       r.engineerPhone,
+                siteSurveyScheduled: r.siteSurveyScheduled ?? true,
+                siteSurveyDate:      r.siteSurveyDate,
+                installationStarted: r.installationStarted ?? true,
+                installationDate:    r.installationDate,
+                systemActivated:     true,
+                activationDate:      r.activationDate,
+                estimatedCompletion: r.estimatedCompletion,
+              };
+              const currentUser = get().user ?? updatedUser;
+              const withProgress = {
+                ...currentUser,
+                properties: currentUser.properties.map(p =>
+                  p.id === prop.id ? { ...p, installationProgress: finalProgress } : p
+                ),
+              };
+              await saveUserData(withProgress);
+              set({ user: withProgress });
+              console.log('[syncProperties] installation progress synced for ACTIVE property', prop.id);
+            }
+          } catch (e) {
+            console.warn('[syncProperties] Could not fetch installation progress for', prop.id, e);
+          }
+        }
       }
     } catch (e) {
       console.warn('[syncProperties] Failed:', e);
@@ -610,29 +594,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!user) return;
 
     try {
-      const response = await apiWrapper.installation.getProgress(propertyId);
+      const response = await api.installation.getProgress(propertyId);
       if (!response?.success) return;
 
       const raw = response.data?.progress ?? response.data;
       if (!raw) return;
 
-      // Map snake_case backend fields → camelCase local fields
       const r = raw as any;
+      console.log('[syncInstallationProgress] raw data:', JSON.stringify(r));
+
       const progress: Partial<InstallationProgress> = {
-        paymentConfirmed:      r.paymentConfirmed      ?? r.payment_confirmed      ?? undefined,
-        engineerAssigned:      r.engineerAssigned      ?? r.engineer_assigned      ?? undefined,
-        engineerName:          r.engineerName          ?? r.engineer_name          ?? undefined,
-        engineerPhone:         r.engineerPhone         ?? r.engineer_phone         ?? undefined,
-        siteSurveyScheduled:   r.siteSurveyScheduled   ?? r.site_survey_scheduled  ?? undefined,
-        siteSurveyDate:        r.siteSurveyDate        ?? r.site_survey_date       ?? undefined,
-        installationStarted:   r.installationStarted   ?? r.installation_started   ?? undefined,
-        installationDate:      r.installationDate      ?? r.installation_date      ?? undefined,
-        systemActivated:       r.systemActivated       ?? r.system_activated       ?? undefined,
-        activationDate:        r.activationDate        ?? r.activation_date        ?? undefined,
-        estimatedCompletion:   r.estimatedCompletion   ?? r.estimated_completion   ?? undefined,
+        paymentConfirmed:    r.paymentConfirmed    ?? r.payment_confirmed    ?? undefined,
+        engineerAssigned:    r.engineerAssigned    ?? r.engineer_assigned    ?? undefined,
+        engineerName:        r.engineerName        ?? r.engineer_name        ?? undefined,
+        engineerPhone:       r.engineerPhone       ?? r.engineer_phone       ?? undefined,
+        siteSurveyScheduled: r.siteSurveyScheduled ?? r.site_survey_scheduled ?? undefined,
+        siteSurveyDate:      r.siteSurveyDate      ?? r.site_survey_date     ?? undefined,
+        installationStarted: r.installationStarted ?? r.installation_started ?? undefined,
+        installationDate:    r.installationDate    ?? r.installation_date    ?? undefined,
+        systemActivated:     r.systemActivated     ?? r.system_activated     ?? undefined,
+        activationDate:      r.activationDate      ?? r.activation_date      ?? undefined,
+        estimatedCompletion: r.estimatedCompletion ?? r.estimated_completion ?? undefined,
       };
 
-      // Strip undefined keys
       const clean = Object.fromEntries(
         Object.entries(progress).filter(([, v]) => v !== undefined)
       ) as Partial<InstallationProgress>;
@@ -648,8 +632,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await saveUserData(updatedUser);
       set({ user: updatedUser });
 
-      // If system is activated, bump subscriptionStatus to ACTIVE
       if (clean.systemActivated) {
+        console.log('[syncInstallationProgress] system activated — setting ACTIVE');
         const withActive: User = {
           ...updatedUser,
           properties: updatedUser.properties.map((p) =>
@@ -663,8 +647,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn('[syncInstallationProgress] Failed:', e);
     }
   },
-=======
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 }));
 
 // ========== SELECTOR ==========

@@ -137,6 +137,77 @@ router.patch(
       .eq('id', requestId);
     assertNoDbError(updateError);
 
+    // When moving to completed → generate proposal + set PLAN_PROPOSED
+    if (status === 'completed' && serviceRequest.property_id) {
+      // Find the survey linked to this service_request
+      const { data: survey, error: surveyLookupError } = await db
+        .from('surveys')
+        .select('id,monthly_consumption,monthly_bill')
+        .eq('property_id', serviceRequest.property_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (surveyLookupError) {
+        console.warn('[provider/requests] survey lookup error:', surveyLookupError.message);
+      }
+
+      // Use survey data if available, otherwise fall back to service_request consumption
+      const consumption = Number(survey?.monthly_consumption ?? serviceRequest.consumption_kwh ?? 500);
+      const monthlyBill = Number(survey?.monthly_bill ?? Math.round(consumption * 8));
+
+      const solarCapacity = Number((consumption / 35).toFixed(1));
+      const batteryStorage = Math.max(2, Number((solarCapacity * 0.5).toFixed(1)));
+      const monthlyFee = Math.round(solarCapacity * 350);
+      const estimatedSavings = Math.round(monthlyBill * 0.35);
+      const estimatedProduction = Math.round(solarCapacity * 120);
+      const whatsIncluded = [
+        `${solarCapacity} kW Solar Panel System`,
+        `${batteryStorage} kWh Battery Storage`,
+        'Smart Energy Monitoring Dashboard',
+        'Grid Integration & Net Metering',
+        'Professional Installation',
+        '24-month Maintenance & Support',
+        'Performance Guarantee',
+        'Mobile App Access',
+      ];
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Insert proposal row directly — reliable, no RPC dependency
+      const { error: proposalInsertError } = await db.from('proposals').insert({
+        id: randomUUID(),
+        property_id: serviceRequest.property_id,
+        survey_id: survey?.id ?? requestId,
+        solar_capacity: solarCapacity,
+        battery_storage: batteryStorage,
+        monthly_fee: monthlyFee,
+        estimated_savings: estimatedSavings,
+        estimated_production: estimatedProduction,
+        contract_duration: 24,
+        installation_fee: 0,
+        security_deposit: 5000,
+        whats_included: whatsIncluded,
+        expires_at: expiresAt,
+        generated_at: now,
+      });
+
+      if (proposalInsertError) {
+        console.error('[provider/requests] proposal insert failed:', proposalInsertError.message);
+      } else {
+        console.log('[provider/requests] proposal created for property', serviceRequest.property_id);
+      }
+
+      // Always update property status to PLAN_PROPOSED
+      const { error: statusUpdateError } = await db
+        .from('properties')
+        .update({ subscription_status: 'PLAN_PROPOSED' })
+        .eq('id', serviceRequest.property_id);
+
+      if (statusUpdateError) {
+        console.error('[provider/requests] property status update failed:', statusUpdateError.message);
+      }
+    }
+
     // When moving to in-progress, create an installations row so the provider
     // installations pipeline picks it up (if one doesn't already exist)
     if (status === 'in-progress') {

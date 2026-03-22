@@ -17,8 +17,8 @@ const INSTALLATION_POLLING_STATES: SubscriptionStatus[] = [
   'PENDING_INSTALLATION',
 ];
 
-const POLL_INTERVAL_MS = 30_000;       // 30s — respectful cadence
-const FOREGROUND_RECHECK_MS = 5_000;  // brief delay after app resumes
+const POLL_INTERVAL_MS = 15_000;       // 15s — fast enough for installation updates
+const FOREGROUND_RECHECK_MS = 3_000;  // brief delay after app resumes
 
 /**
  * Polls the backend while the user is in a "waiting for provider" state.
