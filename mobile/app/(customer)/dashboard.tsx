@@ -224,6 +224,7 @@ export default function Dashboard() {
           </LinearGradient>
         </View>
 
+
         {/* AI Advisor */}
         <TouchableOpacity
           style={styles.aiCard}
@@ -299,11 +300,11 @@ const styles = StyleSheet.create({
   aiTitle: { fontSize: typography.h4, fontWeight: '700', color: colors.primaryDark, marginBottom: 2 },
   aiSubtitle: { fontSize: typography.small, color: colors.primaryDark, opacity: 0.7 },
   aiArrow: { fontSize: 24, color: colors.primaryDark },
-
   promoRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   promoCard: { flex: 1, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   promoIcon: { fontSize: 24, marginBottom: spacing.xs },
   promoTitle: { fontSize: typography.small, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
   promoStat: { fontSize: 32, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
   promoDesc: { fontSize: typography.tiny, color: colors.textTertiary, lineHeight: 16 },
+
 });

@@ -60,19 +60,17 @@ export default function AIAdvisor() {
     setMessages(prev => GiftedChat.append(prev, newMessages));
     setIsTyping(true);
 
-    // Track history for multi-turn context
     historyRef.current.push({ role: 'user', text: userMessage.text });
 
     try {
       const responseText = await askGemini(
         userMessage.text,
         getEnergyContext(),
-        historyRef.current.slice(0, -1), // exclude the message we just added
+        historyRef.current.slice(0, -1),
       );
 
       historyRef.current.push({ role: 'model', text: responseText });
 
-      // Keep history bounded to last 10 turns to avoid token bloat
       if (historyRef.current.length > 20) {
         historyRef.current = historyRef.current.slice(-20);
       }
@@ -144,8 +142,6 @@ export default function AIAdvisor() {
           renderComposer={(props) => (
             <Composer
               {...props}
-              placeholder="Ask about your energy usage..."
-              textInputStyle={{ color: colors.textPrimary }}
             />
           )}
         />

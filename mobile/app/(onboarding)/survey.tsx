@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore, useCurrentProperty, SurveyData } from '../../store/useAuthStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import apiWrapper from '../../services/apiWrapper';
+
 import { colors, spacing, typography, borderRadius } from '../../theme/colors';
 
 type PropertyType = 'residential' | 'commercial';
@@ -38,6 +39,7 @@ const SERVICE_SAVINGS: Record<EnergyService, { saving: string; stat: string; det
   lighting: { saving: 'Save up to 30%',  stat: '40% less power', detail: 'with smart LED systems that auto-adjust to occupancy & daylight' },
   cooling:  { saving: 'Save up to 35%',  stat: '₹1,200/mo avg',  detail: 'with AI-optimised cooling that runs during off-peak solar hours' },
 };
+
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
@@ -326,6 +328,7 @@ export default function SurveyScreen() {
                 </LinearGradient>
               </View>
             )}
+
             <View style={styles.helperCard}>
               <Text style={styles.helperText}>
                 💡 You can add more services later. Our engineer will assess what's best suited for your property.

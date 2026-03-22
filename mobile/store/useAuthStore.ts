@@ -2,7 +2,10 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+<<<<<<< HEAD
 import apiWrapper from '../services/apiWrapper';
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
 // ========== TYPES ==========
 
@@ -141,10 +144,13 @@ interface AuthState {
   saveSurveyData: (propertyId: string, surveyData: SurveyData) => void;
   saveProposal: (propertyId: string, proposal: ProposedPlan) => void;
   updateInstallationProgress: (propertyId: string, progress: Partial<InstallationProgress>) => void;
+<<<<<<< HEAD
 
   // ⭐ Polling helpers — called by useStatusSync every 30s
   syncProperties: () => Promise<void>;
   syncInstallationProgress: (propertyId: string) => Promise<void>;
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -155,7 +161,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ========== REGISTER ==========
   register: async (name, email, password, phone) => {
     try {
+<<<<<<< HEAD
       const response = await api.auth.register(name, email, password, phone, 'CITIZEN');
+=======
+      const response = await api.auth.register(name, email, password, phone);
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
       if (!response.success) {
         throw new Error(response.error?.message || response.message || 'Registration failed');
@@ -166,6 +176,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (!token) throw new Error('No access token received from server');
       await AsyncStorage.setItem('accessToken', token);
 
+<<<<<<< HEAD
       const backendUser = response.data.user;
 
       // Fetch real properties from backend (may be empty for new user)
@@ -219,6 +230,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         createdAt: backendUser.createdAt ?? new Date().toISOString(),
         properties,
         currentPropertyId,
+=======
+      const user: User = {
+        id: response.data.user.id,
+        name: response.data.user.name,
+        email: response.data.user.email,
+        role: response.data.user.role ?? 'CITIZEN',
+        createdAt: response.data.user.createdAt ?? new Date().toISOString(),
+        properties: [defaultProperty()],
+        currentPropertyId: 'default_property',
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
       };
 
       await saveUserData(user);
@@ -267,6 +288,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('✅ Created new user data for:', user.name);
       }
 
+<<<<<<< HEAD
       // Fetch real properties from backend and merge — this ensures subscriptionStatus
       // is always up-to-date and local IDs match backend IDs
       try {
@@ -307,6 +329,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.warn('[login] Could not fetch backend properties:', e);
       }
 
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
       await saveUserData(user);
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
@@ -361,6 +385,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             };
           }
 
+<<<<<<< HEAD
           // Sync real properties from backend on every app start
           try {
             const propsRes = await api.user.getProperties();
@@ -391,6 +416,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // Non-critical — use cached properties
           }
 
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
           await saveUserData(user);
           set({ user, isAuthenticated: true, isLoading: false });
           return;
@@ -480,6 +507,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     saveUserData(updatedUser);
     set({ user: updatedUser });
   },
+<<<<<<< HEAD
 
   // ── SYNC PROPERTIES (called by useStatusSync every 30s) ──────────────────
   // Fetches /user/properties from backend and merges subscriptionStatus +
@@ -635,6 +663,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn('[syncInstallationProgress] Failed:', e);
     }
   },
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 }));
 
 // ========== SELECTOR ==========
