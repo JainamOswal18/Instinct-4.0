@@ -13,6 +13,13 @@ EaaS Nexus is a mobile platform that connects households and businesses with ene
 - [Node.js](https://nodejs.org/) v18 or higher
 - [Expo Go](https://expo.dev/client) installed on your phone (iOS or Android)
 
+#### .env File:
+Include the following in the .env file
+- EXPO_PUBLIC_SUPABASE_URL
+- EXPO_PUBLIC_SUPABASE_KEY
+- EXPO_PUBLIC_GEMINI_API_KEY
+- EXPO_PUBLIC_API_URL=http://LOCAL_NETWORK:3001
+
 ### Install & Run
 
 ```bash
