@@ -107,6 +107,42 @@ router.post(
 );
 
 router.get(
+  '/proposal/by-property/:propertyId',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const db = getEaasClient();
+    const { data: proposal, error } = await db
+      .from('proposals')
+      .select('*')
+      .eq('property_id', String(req.params.propertyId))
+      .order('generated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    assertNoDbError(error);
+
+    if (!proposal) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    sendSuccess(res, {
+      proposalId: proposal.id,
+      solarCapacity: proposal.solar_capacity,
+      batteryStorage: proposal.battery_storage,
+      monthlyFee: proposal.monthly_fee,
+      estimatedSavings: proposal.estimated_savings,
+      estimatedProduction: proposal.estimated_production,
+      contractDuration: proposal.contract_duration,
+      installationFee: proposal.installation_fee,
+      securityDeposit: proposal.security_deposit,
+      whatsIncluded: proposal.whats_included,
+      generatedAt: proposal.generated_at,
+      expiresAt: proposal.expires_at,
+    });
+  }),
+);
+
+router.get(
   '/proposal/:proposalId',
   authenticate,
   asyncHandler(async (req, res) => {

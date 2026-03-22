@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { assertNoDbError, getEaasClient } from '../lib/eaas-db';
 import { authenticate } from '../middleware/auth.middleware';
+import { AuthRequest } from '../types';
 import { asyncHandler } from '../utils/async-handler';
 import { sendError, sendSuccess } from '../utils/api-response';
 
@@ -15,7 +16,7 @@ const submitSurveySchema = z.object({
   monthlyConsumption: z.number().positive(),
   peakHours: z.string().min(1),
   occupants: z.number().int().positive(),
-  appliances: z.array(z.string()).min(1),
+  appliances: z.array(z.string()).default([]),
 });
 
 router.post(
@@ -28,6 +29,7 @@ router.post(
       return;
     }
 
+    const authReq = req as AuthRequest;
     const db = getEaasClient();
     const { data: property, error: propertyError } = await db
       .from('properties')
@@ -66,6 +68,57 @@ router.post(
       .update({ subscription_status: 'SURVEY_SUBMITTED' })
       .eq('id', parsed.data.propertyId);
     assertNoDbError(updateError);
+
+    // Also insert into service_requests so the provider dashboard (GET /provider/requests)
+    // can see this survey — that endpoint queries service_requests, not surveys.
+    // Fetch a real service_id from energy_services (the same table the web app uses)
+    // so the NOT NULL constraint is satisfied with a valid value.
+    const { data: energyService } = await db
+      .from('energy_services')
+      .select('id,title')
+      .eq('active', true)
+      .order('title', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const { error: serviceRequestError } = await db
+      .from('service_requests')
+      .insert({
+        id: survey.id, // reuse survey ID so PATCH /provider/requests/:id/status works on both
+        user_id: authReq.user?.userId,
+        property_id: parsed.data.propertyId,
+        service_id: energyService?.id ?? 'energy_survey',
+        service_title: energyService?.title ?? 'Energy Survey',
+        consumption_kwh: parsed.data.monthlyConsumption,
+        area_description: `${parsed.data.propertyType} property, ${parsed.data.occupants} occupants`,
+        status: 'pending',
+        updated_at: new Date().toISOString(),
+      });
+    if (serviceRequestError) {
+      console.warn('[survey/submit] service_requests insert failed:', serviceRequestError.message);
+    }
+
+    // Fetch user name for the alert message
+    const { data: user } = await db
+      .from('users')
+      .select('name')
+      .eq('id', authReq.user!.userId)
+      .maybeSingle();
+
+    // Insert provider_alerts so provider sees a notification (mirrors what /services/requests does)
+    const { error: alertError } = await db.from('provider_alerts').insert({
+      id: randomUUID(),
+      type: 'new_request',
+      severity: 'info',
+      title: `New survey from ${user?.name || 'Customer'}`,
+      message: `${user?.name || 'A customer'} submitted an Energy Survey for provider review.`,
+      related_id: survey.id,
+      dismissed: false,
+      created_at: new Date().toISOString(),
+    });
+    if (alertError) {
+      console.warn('[survey/submit] provider_alerts insert failed:', alertError.message);
+    }
 
     sendSuccess(res, {
       surveyId: survey.id,

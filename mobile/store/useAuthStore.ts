@@ -2,6 +2,10 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+<<<<<<< HEAD
+import apiWrapper from '../services/apiWrapper';
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
 // ========== TYPES ==========
 
@@ -140,6 +144,13 @@ interface AuthState {
   saveSurveyData: (propertyId: string, surveyData: SurveyData) => void;
   saveProposal: (propertyId: string, proposal: ProposedPlan) => void;
   updateInstallationProgress: (propertyId: string, progress: Partial<InstallationProgress>) => void;
+<<<<<<< HEAD
+
+  // ⭐ Polling helpers — called by useStatusSync every 30s
+  syncProperties: () => Promise<void>;
+  syncInstallationProgress: (propertyId: string) => Promise<void>;
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -150,7 +161,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // ========== REGISTER ==========
   register: async (name, email, password, phone) => {
     try {
+<<<<<<< HEAD
+      const response = await api.auth.register(name, email, password, phone, 'CITIZEN');
+=======
       const response = await api.auth.register(name, email, password, phone);
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
       if (!response.success) {
         throw new Error(response.error?.message || response.message || 'Registration failed');
@@ -161,6 +176,61 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (!token) throw new Error('No access token received from server');
       await AsyncStorage.setItem('accessToken', token);
 
+<<<<<<< HEAD
+      const backendUser = response.data.user;
+
+      // Fetch real properties from backend (may be empty for new user)
+      let properties: Property[] = [];
+      let currentPropertyId: string | null = null;
+      try {
+        const propsRes = await api.user.getProperties();
+        if (propsRes?.success && propsRes.data?.properties?.length) {
+          properties = propsRes.data.properties.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            address: p.address,
+            type: p.type,
+            subscriptionStatus: (p.subscriptionStatus ?? 'NONE') as SubscriptionStatus,
+            createdAt: p.createdAt,
+          }));
+          currentPropertyId = properties[0].id;
+        }
+      } catch {
+        // No properties yet — that's fine for a new user
+      }
+
+      // If no backend properties, create a default one on the backend
+      if (!properties.length) {
+        try {
+          const addRes = await api.user.addProperty('My Property', '', 'residential');
+          if (addRes?.success && addRes.data) {
+            const p = addRes.data;
+            properties = [{
+              id: p.propertyId ?? p.id,
+              name: p.name ?? 'My Property',
+              address: p.address ?? '',
+              type: p.type ?? 'residential',
+              subscriptionStatus: 'NONE',
+              createdAt: p.createdAt ?? new Date().toISOString(),
+            }];
+            currentPropertyId = properties[0].id;
+          }
+        } catch {
+          // Fallback to local-only property
+          properties = [defaultProperty()];
+          currentPropertyId = 'default_property';
+        }
+      }
+
+      const user: User = {
+        id: backendUser.id,
+        name: backendUser.name,
+        email: backendUser.email,
+        role: backendUser.role ?? 'CITIZEN',
+        createdAt: backendUser.createdAt ?? new Date().toISOString(),
+        properties,
+        currentPropertyId,
+=======
       const user: User = {
         id: response.data.user.id,
         name: response.data.user.name,
@@ -169,6 +239,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         createdAt: response.data.user.createdAt ?? new Date().toISOString(),
         properties: [defaultProperty()],
         currentPropertyId: 'default_property',
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
       };
 
       await saveUserData(user);
@@ -217,6 +288,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('✅ Created new user data for:', user.name);
       }
 
+<<<<<<< HEAD
+      // Fetch real properties from backend and merge — this ensures subscriptionStatus
+      // is always up-to-date and local IDs match backend IDs
+      try {
+        const propsRes = await api.user.getProperties();
+        if (propsRes?.success && propsRes.data?.properties?.length) {
+          const backendProps: any[] = propsRes.data.properties;
+
+          // Build merged property list: prefer backend data, keep local survey/proposal/installation data
+          const mergedProperties: Property[] = backendProps.map((bp: any) => {
+            const local = user.properties.find(lp => lp.id === bp.id);
+            return {
+              id: bp.id,
+              name: bp.name,
+              address: bp.address,
+              type: bp.type,
+              subscriptionStatus: (bp.subscriptionStatus ?? 'NONE') as SubscriptionStatus,
+              createdAt: bp.createdAt,
+              // Preserve local-only data
+              surveyData: local?.surveyData,
+              proposedPlan: local?.proposedPlan,
+              installationProgress: local?.installationProgress,
+            };
+          });
+
+          // If local had a default_property with survey data, try to preserve it
+          const localDefault = user.properties.find(p => p.id === 'default_property');
+          if (localDefault?.surveyData && mergedProperties.length > 0 && !mergedProperties[0].surveyData) {
+            mergedProperties[0] = { ...mergedProperties[0], surveyData: localDefault.surveyData };
+          }
+
+          const currentId = mergedProperties.find(p => p.id === user.currentPropertyId)
+            ? user.currentPropertyId
+            : mergedProperties[0].id;
+
+          user = { ...user, properties: mergedProperties, currentPropertyId: currentId };
+        }
+      } catch (e) {
+        console.warn('[login] Could not fetch backend properties:', e);
+      }
+
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
       await saveUserData(user);
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error: any) {
@@ -271,6 +385,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             };
           }
 
+<<<<<<< HEAD
+          // Sync real properties from backend on every app start
+          try {
+            const propsRes = await api.user.getProperties();
+            if (propsRes?.success && propsRes.data?.properties?.length) {
+              const backendProps: any[] = propsRes.data.properties;
+              const mergedProperties: Property[] = backendProps.map((bp: any) => {
+                const local = user.properties.find(lp => lp.id === bp.id);
+                // Also check if local has default_property with data to migrate
+                const localDefault = user.properties.find(lp => lp.id === 'default_property');
+                return {
+                  id: bp.id,
+                  name: bp.name,
+                  address: bp.address,
+                  type: bp.type,
+                  subscriptionStatus: (bp.subscriptionStatus ?? 'NONE') as SubscriptionStatus,
+                  createdAt: bp.createdAt,
+                  surveyData: local?.surveyData ?? (backendProps.length === 1 ? localDefault?.surveyData : undefined),
+                  proposedPlan: local?.proposedPlan ?? (backendProps.length === 1 ? localDefault?.proposedPlan : undefined),
+                  installationProgress: local?.installationProgress ?? (backendProps.length === 1 ? localDefault?.installationProgress : undefined),
+                };
+              });
+              const currentId = mergedProperties.find(p => p.id === user.currentPropertyId)
+                ? user.currentPropertyId
+                : mergedProperties[0].id;
+              user = { ...user, properties: mergedProperties, currentPropertyId: currentId };
+            }
+          } catch {
+            // Non-critical — use cached properties
+          }
+
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
           await saveUserData(user);
           set({ user, isAuthenticated: true, isLoading: false });
           return;
@@ -360,6 +507,164 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     saveUserData(updatedUser);
     set({ user: updatedUser });
   },
+<<<<<<< HEAD
+
+  // ── SYNC PROPERTIES (called by useStatusSync every 30s) ──────────────────
+  // Fetches /user/properties from backend and merges subscriptionStatus +
+  // proposedPlan into local state so navigation reacts to provider actions.
+  syncProperties: async () => {
+    const user = get().user;
+    if (!user) return;
+
+    try {
+      const response = await apiWrapper.user.getProperties();
+      if (!response?.success) return;
+
+      const backendProps: any[] = response.data?.properties ?? [];
+      if (!backendProps.length) return;
+
+      let changed = false;
+
+      // Handle migration: if local has only 'default_property', adopt backend IDs
+      const hasOnlyDefault = user.properties.length === 1 && user.properties[0].id === 'default_property';
+      if (hasOnlyDefault) {
+        const localDefault = user.properties[0];
+        const mergedProperties: Property[] = backendProps.map((bp: any) => ({
+          id: bp.id,
+          name: bp.name,
+          address: bp.address,
+          type: bp.type,
+          subscriptionStatus: (bp.subscriptionStatus ?? 'NONE') as SubscriptionStatus,
+          createdAt: bp.createdAt,
+          surveyData: localDefault.surveyData,
+          proposedPlan: localDefault.proposedPlan,
+          installationProgress: localDefault.installationProgress,
+        }));
+        const updatedUser = { ...user, properties: mergedProperties, currentPropertyId: mergedProperties[0].id };
+        await saveUserData(updatedUser);
+        set({ user: updatedUser });
+        return;
+      }
+
+      const updatedProperties = user.properties.map((localProp) => {
+        const remote = backendProps.find((bp: any) => bp.id === localProp.id);
+        if (!remote) return localProp;
+
+        const remoteStatus = remote.subscriptionStatus as SubscriptionStatus;
+        if (remoteStatus === localProp.subscriptionStatus) return localProp;
+
+        changed = true;
+        console.log(`[syncProperties] ${localProp.id}: ${localProp.subscriptionStatus} → ${remoteStatus}`);
+        return { ...localProp, subscriptionStatus: remoteStatus };
+      });
+
+      if (!changed) return;
+
+      const updatedUser = { ...user, properties: updatedProperties };
+      await saveUserData(updatedUser);
+      set({ user: updatedUser });
+
+      // If any property just became PLAN_PROPOSED and has no local proposal, fetch it
+      for (const prop of updatedProperties) {
+        if (prop.subscriptionStatus === 'PLAN_PROPOSED' && !prop.proposedPlan) {
+          try {
+            // Try fetching proposal by property ID
+            const proposalRes = await api.subscription.getProposalByProperty(prop.id);
+            if (proposalRes?.success && proposalRes.data) {
+              const d = proposalRes.data;
+              const proposal: ProposedPlan = {
+                id: d.proposalId ?? prop.id,
+                solarCapacity: d.solarCapacity,
+                batteryStorage: d.batteryStorage,
+                monthlyFee: d.monthlyFee,
+                estimatedSavings: d.estimatedSavings,
+                estimatedProduction: d.estimatedProduction,
+                contractDuration: d.contractDuration,
+                installationFee: d.installationFee,
+                securityDeposit: d.securityDeposit,
+                whatsIncluded: d.whatsIncluded,
+                generatedAt: d.generatedAt,
+              };
+              const withProposal = {
+                ...updatedUser,
+                properties: updatedProperties.map(p =>
+                  p.id === prop.id ? { ...p, proposedPlan: proposal } : p
+                ),
+              };
+              await saveUserData(withProposal);
+              set({ user: withProposal });
+            }
+          } catch (e) {
+            console.warn('[syncProperties] Could not fetch proposal for', prop.id, e);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[syncProperties] Failed:', e);
+    }
+  },
+
+  // ── SYNC INSTALLATION PROGRESS (called by useStatusSync in PENDING_INSTALLATION) ──
+  syncInstallationProgress: async (propertyId: string) => {
+    const user = get().user;
+    if (!user) return;
+
+    try {
+      const response = await apiWrapper.installation.getProgress(propertyId);
+      if (!response?.success) return;
+
+      const raw = response.data?.progress ?? response.data;
+      if (!raw) return;
+
+      // Map snake_case backend fields → camelCase local fields
+      const r = raw as any;
+      const progress: Partial<InstallationProgress> = {
+        paymentConfirmed:      r.paymentConfirmed      ?? r.payment_confirmed      ?? undefined,
+        engineerAssigned:      r.engineerAssigned      ?? r.engineer_assigned      ?? undefined,
+        engineerName:          r.engineerName          ?? r.engineer_name          ?? undefined,
+        engineerPhone:         r.engineerPhone         ?? r.engineer_phone         ?? undefined,
+        siteSurveyScheduled:   r.siteSurveyScheduled   ?? r.site_survey_scheduled  ?? undefined,
+        siteSurveyDate:        r.siteSurveyDate        ?? r.site_survey_date       ?? undefined,
+        installationStarted:   r.installationStarted   ?? r.installation_started   ?? undefined,
+        installationDate:      r.installationDate      ?? r.installation_date      ?? undefined,
+        systemActivated:       r.systemActivated       ?? r.system_activated       ?? undefined,
+        activationDate:        r.activationDate        ?? r.activation_date        ?? undefined,
+        estimatedCompletion:   r.estimatedCompletion   ?? r.estimated_completion   ?? undefined,
+      };
+
+      // Strip undefined keys
+      const clean = Object.fromEntries(
+        Object.entries(progress).filter(([, v]) => v !== undefined)
+      ) as Partial<InstallationProgress>;
+
+      const updatedUser: User = {
+        ...user,
+        properties: user.properties.map((p) => {
+          if (p.id !== propertyId) return p;
+          const existing = p.installationProgress ?? defaultInstallationProgress();
+          return { ...p, installationProgress: { ...existing, ...clean } };
+        }),
+      };
+      await saveUserData(updatedUser);
+      set({ user: updatedUser });
+
+      // If system is activated, bump subscriptionStatus to ACTIVE
+      if (clean.systemActivated) {
+        const withActive: User = {
+          ...updatedUser,
+          properties: updatedUser.properties.map((p) =>
+            p.id === propertyId ? { ...p, subscriptionStatus: 'ACTIVE' as SubscriptionStatus } : p
+          ),
+        };
+        await saveUserData(withActive);
+        set({ user: withActive });
+      }
+    } catch (e) {
+      console.warn('[syncInstallationProgress] Failed:', e);
+    }
+  },
+=======
+>>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 }));
 
 // ========== SELECTOR ==========

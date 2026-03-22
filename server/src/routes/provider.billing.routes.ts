@@ -334,11 +334,18 @@ router.patch(
         updated_at: now,
       })
       .eq('id', requestId)
-      .select('id,status')
+      .select('id,status,property_id')
       .maybeSingle();
     assertNoDbError(serviceRequestError);
 
     if (serviceRequest) {
+      // When provider marks completed, update property subscription_status so mobile polling picks it up
+      if (parsed.data.status === 'completed' && serviceRequest.property_id) {
+        await db
+          .from('properties')
+          .update({ subscription_status: 'PLAN_PROPOSED' })
+          .eq('id', serviceRequest.property_id);
+      }
       sendSuccess(res, {
         requestId: serviceRequest.id,
         status: serviceRequest.status,
