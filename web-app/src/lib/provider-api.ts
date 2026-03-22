@@ -239,6 +239,8 @@ export async function fetchProviderBillingDrafts(status?: string) {
       totalAmount: number;
       status: string;
       sentAt: string | null;
+      acceptedAt: string | null;
+      disputedAt: string | null;
       createdAt: string;
       updatedAt: string;
     }>;

@@ -223,7 +223,7 @@ router.post(
     assertNoDbError(updateBillError);
 
     const { data: installation, error: installationError } = await db
-      .from('installations')
+      .from('installation_progress')
       .select('id')
       .eq('property_id', bill.property_id)
       .order('created_at', { ascending: false })
@@ -233,7 +233,7 @@ router.post(
 
     if (installation) {
       const { error: installationUpdateError } = await db
-        .from('installations')
+        .from('installation_progress')
         .update({ status: 'PROCUREMENT', updated_at: now })
         .eq('id', installation.id);
       assertNoDbError(installationUpdateError);
@@ -537,6 +537,253 @@ router.patch(
       },
       'Bill adjusted successfully',
     );
+  }),
+);
+
+
+// ── User-facing billing draft endpoints ───────────────────────
+
+/**
+ * GET /billing/my-drafts
+ * Returns provider billing drafts sent to the authenticated user,
+ * joined with the corresponding bill details.
+ */
+router.get(
+  '/my-drafts',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthRequest;
+    const db = getEaasClient();
+
+    // Get all properties owned by this user
+    const { data: properties, error: propError } = await db
+      .from('properties')
+      .select('id')
+      .eq('user_id', authReq.user!.userId);
+    assertNoDbError(propError);
+
+    const propertyIds = (properties || []).map((p: any) => p.id);
+    if (propertyIds.length === 0) {
+      sendSuccess(res, { drafts: [] });
+      return;
+    }
+
+    // Fetch drafts for those properties that have been sent
+    const { data: drafts, error: draftsError } = await db
+      .from('provider_billing_drafts')
+      .select('*')
+      .in('property_id', propertyIds)
+      .in('status', ['sent', 'accepted', 'disputed'])
+      .order('created_at', { ascending: false });
+    assertNoDbError(draftsError);
+
+    const draftList = drafts || [];
+
+    // Fetch related bills
+    const billIds = draftList.map((d: any) => d.bill_id).filter(Boolean);
+    const { data: bills, error: billsError } = billIds.length
+      ? await db.from('bills').select('*').in('id', billIds)
+      : { data: [], error: null };
+    assertNoDbError(billsError as any);
+
+    const billMap = new Map((bills || []).map((b: any) => [b.id, b]));
+
+    sendSuccess(res, {
+      drafts: draftList.map((d: any) => {
+        const bill = d.bill_id ? billMap.get(d.bill_id) : null;
+        return {
+          draftId: d.id,
+          billId: d.bill_id,
+          propertyId: d.property_id,
+          title: d.title,
+          description: d.description,
+          lineItems: d.line_items || [],
+          charges: d.charges || {},
+          totalAmount: d.total_amount,
+          status: d.status,
+          sentAt: d.sent_at,
+          acceptedAt: d.accepted_at,
+          disputedAt: d.disputed_at,
+          createdAt: d.created_at,
+          // Bill details
+          dueDate: bill?.due_date || null,
+          generatedAt: bill?.generated_at || null,
+          billStatus: bill?.status || null,
+        };
+      }),
+    });
+  }),
+);
+
+/**
+ * POST /billing/my-drafts/:draftId/accept
+ * User accepts a provider billing draft.
+ */
+router.post(
+  '/my-drafts/:draftId/accept',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthRequest;
+    const draftId = String(req.params.draftId);
+    const db = getEaasClient();
+    const now = new Date().toISOString();
+
+    // Verify the draft belongs to this user via property ownership
+    const { data: draft, error: draftError } = await db
+      .from('provider_billing_drafts')
+      .select('id,bill_id,property_id,status')
+      .eq('id', draftId)
+      .maybeSingle();
+    assertNoDbError(draftError);
+
+    if (!draft) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    // Verify ownership
+    const { data: prop, error: propError } = await db
+      .from('properties')
+      .select('user_id')
+      .eq('id', draft.property_id)
+      .maybeSingle();
+    assertNoDbError(propError);
+
+    if (!prop || prop.user_id !== authReq.user!.userId) {
+      sendError(res, 403, 'FORBIDDEN', 'Insufficient permissions');
+      return;
+    }
+
+    // Update draft status
+    await db
+      .from('provider_billing_drafts')
+      .update({ status: 'accepted', accepted_at: now, updated_at: now })
+      .eq('id', draftId);
+
+    // Update bill status
+    if (draft.bill_id) {
+      await db.from('bills').update({ status: 'accepted' }).eq('id', draft.bill_id);
+    }
+
+    // Notify the provider (executive) who created this draft
+    const { data: draftFull, error: draftFullError } = await db
+      .from('provider_billing_drafts')
+      .select('provider_user_id, title')
+      .eq('id', draftId)
+      .maybeSingle();
+
+    if (!draftFullError && draftFull?.provider_user_id) {
+      const { data: userInfo } = await db
+        .from('users')
+        .select('name')
+        .eq('id', authReq.user!.userId)
+        .maybeSingle();
+      const customerName = (userInfo as any)?.name || 'The customer';
+      const planTitle = draftFull.title || 'the billing plan';
+
+      // Notification for the provider
+      await db.from('notifications').insert({
+        id: randomUUID(),
+        user_id: draftFull.provider_user_id,
+        type: 'payment_accepted',
+        title: 'Billing Plan Accepted',
+        message: `${customerName} has accepted "${planTitle}" and confirmed their payment. Check Billing Review for details.`,
+        route: '/provider-billing',
+        read: false,
+        dismissible: true,
+        persistent: false,
+        created_at: now,
+      });
+
+      // Alert entry so it appears in provider Alerts section
+      await db.from('provider_alerts').insert({
+        id: randomUUID(),
+        provider_user_id: draftFull.provider_user_id,
+        type: 'payment_received',
+        severity: 'info',
+        title: 'Payment Accepted — ' + planTitle,
+        message: `${customerName} has accepted and confirmed payment for "${planTitle}".`,
+        related_id: draftId,
+        dismissed: false,
+        created_at: now,
+      }).catch(() => {
+        // provider_alerts table may not exist in all envs — fail silently
+      });
+    }
+
+    sendSuccess(res, { draftId, billId: draft.bill_id, status: 'accepted', acceptedAt: now });
+
+  }),
+);
+
+/**
+ * POST /billing/my-drafts/:draftId/dispute
+ * User raises a concern (dispute) on a provider billing draft.
+ */
+router.post(
+  '/my-drafts/:draftId/dispute',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const authReq = req as AuthRequest;
+    const draftId = String(req.params.draftId);
+    const { reason } = req.body as { reason?: string };
+    const db = getEaasClient();
+    const now = new Date().toISOString();
+
+    const { data: draft, error: draftError } = await db
+      .from('provider_billing_drafts')
+      .select('id,bill_id,property_id,status')
+      .eq('id', draftId)
+      .maybeSingle();
+    assertNoDbError(draftError);
+
+    if (!draft) {
+      sendError(res, 404, 'NOT_FOUND', 'Resource not found');
+      return;
+    }
+
+    const { data: prop, error: propError } = await db
+      .from('properties')
+      .select('user_id')
+      .eq('id', draft.property_id)
+      .maybeSingle();
+    assertNoDbError(propError);
+
+    if (!prop || prop.user_id !== authReq.user!.userId) {
+      sendError(res, 403, 'FORBIDDEN', 'Insufficient permissions');
+      return;
+    }
+
+    // Update draft status
+    await db
+      .from('provider_billing_drafts')
+      .update({ status: 'disputed', disputed_at: now, updated_at: now })
+      .eq('id', draftId);
+
+    // Update bill status
+    if (draft.bill_id) {
+      await db.from('bills').update({ status: 'disputed' }).eq('id', draft.bill_id);
+    }
+
+    // Create a support ticket if reason given
+    if (reason) {
+      await db.from('support_tickets').insert({
+        id: randomUUID(),
+        user_id: authReq.user!.userId,
+        property_id: draft.property_id,
+        bill_id: draft.bill_id || null,
+        category: 'billing',
+        priority: 'medium',
+        status: 'open',
+        title: 'Billing plan concern raised',
+        description: reason,
+        estimated_response: 'within 24 hours',
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    sendSuccess(res, { draftId, billId: draft.bill_id, status: 'disputed', disputedAt: now });
   }),
 );
 

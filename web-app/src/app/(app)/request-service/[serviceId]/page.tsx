@@ -26,6 +26,138 @@ type ServiceCatalogItem = {
   imageId: string;
 };
 
+function easeOutExp(x: number): number {
+  return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
+}
+
+const AnimatedNumber = ({ value }: { value: string }) => {
+  const [displayValue, setDisplayValue] = useState(value.replace(/\d/g, '0'));
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const duration = 2000;
+    
+    const numbersInString = Array.from(value.matchAll(/\d+/g)).map(m => ({
+      val: parseFloat(m[0]),
+      index: m.index!,
+      length: m[0].length
+    }));
+    
+    if (numbersInString.length === 0) {
+      setDisplayValue(value);
+      return;
+    }
+
+    let animationFrameId: number;
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      const easeProgress = easeOutExp(progress);
+      
+      let currentString = value;
+      for (let i = numbersInString.length - 1; i >= 0; i--) {
+        const num = numbersInString[i];
+        const currentNum = Math.floor(num.val * easeProgress);
+        currentString = currentString.slice(0, num.index) + currentNum + currentString.slice(num.index + num.length);
+      }
+      
+      setDisplayValue(currentString);
+      
+      if (progress < 1) {
+        animationFrameId = window.requestAnimationFrame(step);
+      }
+    };
+    
+    animationFrameId = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [value]);
+
+  return <span>{displayValue}</span>;
+};
+
+const getCostReduction = (title: string) => {
+  const t = title.toLowerCase();
+  
+  if (t.includes('solar')) return {
+    how: 'By generating your own electricity locally, you offset nearly your entire grid dependence and lock in low rates for decades.'
+  };
+  if (t.includes('hvac')) return {
+    how: 'By optimizing cooling cycles and reducing compressor workload during peak summer heat, significantly lowering massive AC consumption.'
+  };
+  if (t.includes('audit')) return {
+    how: 'By identifying hidden energy hogs, fixing power leaks, and providing actionable lifestyle and hardware adjustments.'
+  };
+  if (t.includes('inverter')) return {
+    how: 'By reducing charging conversion losses and maximizing the efficiency of your backup power to avoid peak-hour grid draws.'
+  };
+  if (t.includes('battery')) return {
+    title: 'Expected Cost Reduction',
+    how: 'By extending battery pack lifespan and slashing expensive replacement frequency through AI-driven preventative diagnostics.'
+  };
+  
+  return {
+    how: 'By comprehensively analyzing and upgrading your core electrical infrastructure to operate at maximum efficiency.'
+  };
+};
+
+const getEstimatedImpact = (title: string, consumptionStr: string) => {
+  const c = Number(consumptionStr);
+  if (!c || c <= 0) return null;
+  
+  const t = title.toLowerCase();
+  
+  // 1 kWp solar = ~120 kWh/month generation in typical Indian conditions.
+  if (t.includes('solar')) {
+    const kw = Math.max(1, Math.round((c / 120) * 10) / 10);
+    return {
+      label: 'Target System Size',
+      value: `${kw} kWp`,
+      sub: `Offsets ~100% of your ${c} kWh usage`
+    };
+  }
+  
+  // HVAC takes ~40-50% of home energy. Tuning saves ~20% of HVAC = ~8-10% of total.
+  if (t.includes('hvac')) {
+    const savings = Math.round(c * 0.10);
+    return {
+      label: 'Est. Cooling Savings',
+      value: `~${savings} kWh/mo`,
+      sub: 'Based on 10% average total efficiency gain'
+    };
+  }
+  
+  // Energy Audit usually uncovers 15-20% waste
+  if (t.includes('audit')) {
+    const savings = Math.round(c * 0.15);
+    return {
+      label: 'Potential Waste Identified',
+      value: `~${savings} kWh/mo`,
+      sub: 'Based on typical 15% home energy waste'
+    };
+  }
+
+  // Smart Inverter saves ~5% from better charging/discharging logic
+  if (t.includes('inverter')) {
+    const savings = Math.round(c * 0.05);
+    return {
+      label: 'Est. Efficiency Gain',
+      value: `~${savings} kWh/mo`,
+      sub: 'Reduced conversion & charging loss'
+    };
+  }
+
+  // Battery health extends life, doesn't directly save kWh.
+  if (t.includes('battery')) {
+    return {
+      label: 'Est. Battery Life Extension',
+      value: '+20-30%',
+      sub: 'With regular proactive health diagnostics'
+    };
+  }
+
+  return null;
+};
+
 export default function RequestServicePage() {
   const params = useParams();
   const router = useRouter();
@@ -223,6 +355,8 @@ export default function RequestServicePage() {
                 onChange={(e) => setConsumption(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">Find this on your most recent utility bill.</p>
+              
+
             </div>
 
             <div className="space-y-2">
@@ -348,6 +482,29 @@ export default function RequestServicePage() {
             </Button>
           </form>
         </CardContent>
+      </Card>
+
+      {/* Benefits Card Below the form */}
+      <Card className="overflow-hidden border-primary/20 shadow-lg">
+        <div className="flex flex-col">
+          <div className="p-8 w-full bg-card flex flex-col justify-center items-center text-center space-y-4">
+            <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full mb-2">
+              <CheckCircle2 className="h-8 w-8 text-primary" />
+            </div>
+            <h4 className="font-headline text-xl md:text-2xl font-bold text-foreground">
+              {getCostReduction(service.title).title || 'Expected Cost Reduction'}
+            </h4>
+            <div className="text-5xl md:text-6xl font-black text-primary tracking-tighter drop-shadow-sm tabular-nums">
+              <AnimatedNumber value="30%" />
+            </div>
+            <div className="space-y-3 pt-2">
+               <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs font-semibold rounded-full uppercase tracking-wider">How it works</span>
+               <p className="text-muted-foreground max-w-sm mx-auto text-sm md:text-base leading-relaxed">
+                 {getCostReduction(service.title).how}
+               </p>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );

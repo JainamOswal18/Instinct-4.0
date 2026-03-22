@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,74 +13,51 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  getUserApprovedBills,
-  respondToBill,
-  addUserNotification,
-  type BillingDraft,
-} from '@/lib/notifications';
+  type ApiDraft,
+  fetchMyBillingDrafts,
+  acceptBillingDraft,
+  disputeBillingDraft,
+} from '@/lib/customer-api';
 import {
-  addTicket,
-} from '@/lib/provider-data';
-import {
-  Download, CheckCircle, Zap, Wrench, ShieldCheck, Cpu,
-  IndianRupee, TrendingDown, CalendarClock, CreditCard,
-  MessageSquare, ThumbsUp, Clock, Sparkles, Send,
+  Download, CheckCircle, Zap, ShieldCheck,
+  IndianRupee, CalendarClock, CreditCard,
+  MessageSquare, ThumbsUp, Clock, Sparkles,
 } from 'lucide-react';
 
-const pastInvoices = [
-  { id: 'INV-2024-005', date: '2024-05-01', amount: '₹10,450', status: 'Paid' },
-  { id: 'INV-2024-004', date: '2024-04-01', amount: '₹11,000', status: 'Paid' },
-  { id: 'INV-2024-003', date: '2024-03-01', amount: '₹9,895', status: 'Paid' },
-  { id: 'INV-2024-002', date: '2024-02-01', amount: '₹11,680', status: 'Paid' },
-];
-
-const paymentMethods = [
-  { type: 'Visa', last4: '4242', expiry: '12/26', isPrimary: true },
-  { type: 'Mastercard', last4: '8989', expiry: '08/25', isPrimary: false },
-];
-
-// ============================================
+// ──────────────────────────────────────────────────────────────
 // APPROVED BILL CARD
-// ============================================
-function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: () => void }) {
-  const plan = bill.generatedPlan;
+// ──────────────────────────────────────────────────────────────
+function ApprovedBillCard({ bill, onRespond }: { bill: ApiDraft; onRespond: () => void }) {
   const [selectedDuration, setSelectedDuration] = useState<12 | 24 | 36>(12);
 
   const formatINR = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
-  const getAdjustedPricing = (duration: 12 | 24 | 36) => {
-    const baseMonthly = plan.totalMonthly;
-    const discounts = { 12: 0, 24: 0.05, 36: 0.10 };
-    const discount = discounts[duration];
-    const adjustedMonthly = Math.floor(baseMonthly * (1 - discount));
-    const totalAmount = adjustedMonthly * duration;
-    const totalSavings = (plan.estimatedMonthlySavings * duration) - totalAmount;
+  const totalMonthly = bill.charges
+    ? (bill.charges.subscriptionFee || 0) + (bill.charges.usageCharge || 0) + (bill.charges.taxes || 0)
+    : bill.totalAmount;
 
-    return {
-      monthlyFee: adjustedMonthly,
-      totalAmount,
-      totalSavings,
-      discount: discount * 100,
-      baseMonthly
-    };
+  const getAdjustedPricing = (duration: 12 | 24 | 36) => {
+    const discounts: Record<number, number> = { 12: 0, 24: 0.05, 36: 0.10 };
+    const discount = discounts[duration];
+    const adjustedMonthly = Math.floor(totalMonthly * (1 - discount));
+    const totalAmount = adjustedMonthly * duration;
+    return { monthlyFee: adjustedMonthly, totalAmount, discount: discount * 100, baseMonthly: totalMonthly };
   };
 
   const pricing = getAdjustedPricing(selectedDuration);
 
   const getStatusBadge = () => {
     switch (bill.status) {
-      case 'provider-approved':
+      case 'sent':
         return <Badge className="bg-blue-500/20 text-blue-400 gap-1"><Clock className="h-3 w-3" /> Awaiting Your Response</Badge>;
-      case 'user-accepted':
+      case 'accepted':
         return <Badge className="bg-green-500/20 text-green-400 gap-1"><CheckCircle className="h-3 w-3" /> Accepted</Badge>;
-      case 'user-disputed':
+      case 'disputed':
         return <Badge variant="destructive" className="gap-1"><MessageSquare className="h-3 w-3" /> Concern Raised</Badge>;
       default:
         return null;
@@ -99,14 +76,14 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
             <h3 className="font-headline text-lg font-semibold flex items-center gap-2">
               Provider-Approved Custom Plan
               <Badge variant="outline" className="text-[10px] font-normal gap-1">
-                <Sparkles className="h-2.5 w-2.5" /> AI-Generated • Provider Reviewed
+                <Sparkles className="h-2.5 w-2.5" /> Provider Reviewed
               </Badge>
             </h3>
             <p className="text-sm text-muted-foreground">
-              {plan.summary}
+              {bill.description || bill.title}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Approved on {bill.approvedAt ? new Date(bill.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
+              Sent on {bill.sentAt ? new Date(bill.sentAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A'}
             </p>
           </div>
           {getStatusBadge()}
@@ -119,109 +96,75 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
           <CardHeader>
             <CardTitle className="font-headline text-2xl flex items-center gap-2">
               <Zap className="h-6 w-6 text-primary" />
-              {plan.planName}
+              {bill.title}
             </CardTitle>
             <CardDescription>
-              Custom plan for {bill.serviceTitle} — {bill.consumption} kWh consumption
+              Custom billing plan &mdash; Due {bill.dueDate ? new Date(bill.dueDate).toLocaleDateString('en-IN') : 'N/A'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Pricing */}
             <div className="rounded-lg border p-5 bg-muted/30">
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold font-headline">{formatINR(plan.totalMonthly)}</span>
+                <span className="text-4xl font-bold font-headline">{formatINR(totalMonthly)}</span>
                 <span className="text-lg text-muted-foreground">/month</span>
               </div>
               <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-1.5 text-sm text-green-500">
-                  <TrendingDown className="h-4 w-4" />
-                  <span>Save {formatINR(plan.estimatedMonthlySavings)}/month</span>
-                </div>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <CalendarClock className="h-4 w-4" />
-                  <span>Payback in {plan.paybackPeriodMonths} months</span>
+                  <span>Due {bill.dueDate ? new Date(bill.dueDate).toLocaleDateString('en-IN') : 'N/A'}</span>
                 </div>
               </div>
             </div>
 
-            {/* Features */}
+            {/* Charge Breakdown */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">What&apos;s Included</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {plan.features.map((feature, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                    <span>{feature}</span>
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Charge Breakdown</h4>
+              <div className="space-y-2">
+                {bill.charges?.subscriptionFee > 0 && (
+                  <div className="flex items-center justify-between py-1 text-sm">
+                    <div className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-muted-foreground" /> Subscription Fee</div>
+                    <span className="font-medium">{formatINR(bill.charges.subscriptionFee)}/mo</span>
                   </div>
-                ))}
+                )}
+                {bill.charges?.usageCharge > 0 && (
+                  <div className="flex items-center justify-between py-1 text-sm">
+                    <div className="flex items-center gap-2"><Zap className="h-4 w-4 text-muted-foreground" /> Usage Charge</div>
+                    <span className="font-medium">{formatINR(bill.charges.usageCharge)}</span>
+                  </div>
+                )}
+                {bill.charges?.taxes > 0 && (
+                  <div className="flex items-center justify-between py-1 text-sm">
+                    <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-muted-foreground" /> Taxes</div>
+                    <span className="font-medium">{formatINR(bill.charges.taxes)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* System Specifications */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">System Specifications</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-md border p-3 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Cpu className="h-3 w-3" /> Capacity
-                  </div>
-                  <p className="text-sm font-medium">{plan.specifications.systemCapacity}</p>
-                </div>
-                <div className="rounded-md border p-3 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Zap className="h-3 w-3" /> Expected Generation
-                  </div>
-                  <p className="text-sm font-medium">{plan.specifications.expectedGeneration}</p>
-                </div>
-                <div className="rounded-md border p-3 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <ShieldCheck className="h-3 w-3" /> Warranty
-                  </div>
-                  <p className="text-sm font-medium">{plan.specifications.warrantyPeriod}</p>
-                </div>
-                <div className="rounded-md border p-3 space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Wrench className="h-3 w-3" /> Equipment
-                  </div>
-                  <p className="text-sm font-medium">{plan.specifications.equipmentDetails}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Custom Charges */}
-            {plan.customCharges && plan.customCharges.length > 0 && (
+            {/* Line items if any */}
+            {bill.lineItems && bill.lineItems.length > 0 && (
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Additional Charges</h4>
-                {plan.customCharges.map((charge, i) => (
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Line Items</h4>
+                {bill.lineItems.map((item: any, i: number) => (
                   <div key={i} className="flex items-center justify-between py-2 text-sm">
-                    <span>{charge.label}</span>
-                    <span className="font-medium">{formatINR(charge.amount)} {charge.recurring ? '/mo' : '(one-time)'}</span>
+                    <span>{item.label || item.description || `Item ${i + 1}`}</span>
+                    {item.amount != null && <span className="font-medium">{formatINR(Number(item.amount))}</span>}
                   </div>
                 ))}
               </div>
             )}
 
-            {/* AI Rationale */}
-            <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4">
-              <div className="flex items-start gap-2">
-                <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">AI Analysis</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{plan.rationale}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons — only if awaiting response */}
-            {bill.status === 'provider-approved' && (
+            {/* Action Buttons */}
+            {bill.status === 'sent' && (
               <div className="flex gap-3">
                 <Button className="flex-1 h-12 text-lg font-semibold gap-2 bg-green-600 hover:bg-green-700" onClick={onRespond}>
-                  <ThumbsUp className="h-5 w-5" /> Accept & Proceed to Payment
+                  <ThumbsUp className="h-5 w-5" /> Accept &amp; Proceed to Payment
                 </Button>
               </div>
             )}
 
-            {bill.status === 'user-accepted' && (
+            {bill.status === 'accepted' && (
               <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4 flex items-center gap-3">
                 <CheckCircle className="h-6 w-6 text-green-500" />
                 <div>
@@ -231,13 +174,12 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
               </div>
             )}
 
-            {bill.status === 'user-disputed' && (
+            {bill.status === 'disputed' && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex items-center gap-3">
                 <MessageSquare className="h-6 w-6 text-destructive" />
                 <div>
                   <p className="font-semibold text-destructive">Concern Raised</p>
                   <p className="text-sm text-muted-foreground">A support ticket has been created. Your provider will review your concern.</p>
-                  {bill.disputeReason && <p className="text-sm mt-1">&quot;{bill.disputeReason}&quot;</p>}
                 </div>
               </div>
             )}
@@ -256,10 +198,10 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
           <CardContent className="space-y-4">
             {/* Duration Selector */}
             <div className="flex bg-muted/50 p-1 rounded-lg mt-2">
-              {[12, 24, 36].map((months) => (
+              {([12, 24, 36] as const).map((months) => (
                 <button
                   key={months}
-                  onClick={() => setSelectedDuration(months as 12 | 24 | 36)}
+                  onClick={() => setSelectedDuration(months)}
                   className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-all ${selectedDuration === months
                     ? 'bg-background shadow-sm text-primary'
                     : 'text-muted-foreground hover:text-foreground'
@@ -271,44 +213,6 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">Installation Cost</span>
-                </div>
-                <span className="font-semibold">{formatINR(plan.installationCost)}</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground -mt-1 pl-6">One-time setup fee</p>
-              <Separator />
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">Monthly Service</span>
-                </div>
-                <span className="font-semibold">{formatINR(plan.monthlyServiceCharge)}/mo</span>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">Maintenance Fee</span>
-                </div>
-                <span className="font-semibold">{formatINR(plan.maintenanceFee)}/mo</span>
-              </div>
-              {plan.customCharges && plan.customCharges.length > 0 && (
-                <>
-                  <Separator />
-                  {plan.customCharges.map((charge, i) => (
-                    <div key={i} className="flex items-center justify-between py-1">
-                      <span className="text-sm text-muted-foreground">{charge.label}</span>
-                      <span className="font-medium text-sm">{formatINR(charge.amount)}{charge.recurring ? '/mo' : ''}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              <Separator className="my-4" />
-
               <div className="space-y-1 py-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Base Monthly</span>
@@ -335,30 +239,19 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
 
             <Separator />
 
-            {/* Savings highlight */}
-            <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-green-500" />
-                  <span className="text-sm font-semibold text-green-500">Net Estimated Savings</span>
-                </div>
+            {/* Total amount highlight */}
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-1">
+              <div className="flex items-center gap-2">
+                <IndianRupee className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold text-primary">Total Billed Amount</span>
               </div>
-              <div className="flex items-end gap-2">
-                <p className="text-2xl font-bold text-green-500">
-                  {formatINR(Math.max(0, pricing.totalSavings))}
-                </p>
-                <p className="text-xs text-muted-foreground mb-1 font-medium bg-green-500/10 px-2 py-0.5 rounded-full">
-                  Over {selectedDuration} months
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground pt-1">
-                Investment recovery in approx. <strong>{plan.paybackPeriodMonths} months</strong>
-              </p>
+              <p className="text-2xl font-bold">{formatINR(bill.totalAmount)}</p>
+              <p className="text-xs text-muted-foreground">Due {bill.dueDate ? new Date(bill.dueDate).toLocaleDateString('en-IN') : 'N/A'}</p>
             </div>
 
             {/* Raise concern button */}
-            {bill.status === 'provider-approved' && (
-              <Button variant="outline" className="w-full gap-2 text-muted-foreground" onClick={onRespond} data-action="dispute">
+            {bill.status === 'sent' && (
+              <Button variant="outline" className="w-full gap-2 text-muted-foreground" onClick={onRespond}>
                 <MessageSquare className="h-4 w-4" /> Have a concern? Raise a ticket
               </Button>
             )}
@@ -369,83 +262,88 @@ function ApprovedBillCard({ bill, onRespond }: { bill: BillingDraft; onRespond: 
   );
 }
 
-// ============================================
+// ──────────────────────────────────────────────────────────────
 // MAIN BILLING PAGE
-// ============================================
+// ──────────────────────────────────────────────────────────────
+
+const paymentMethods = [
+  { type: 'Visa', last4: '4242', expiry: '12/24', isPrimary: true },
+  { type: 'Mastercard', last4: '5555', expiry: '06/25', isPrimary: false },
+];
+
+const pastInvoices = [
+  { id: 'INV001', date: '2023-10-01', amount: '₹1,500.00', status: 'Paid' },
+  { id: 'INV002', date: '2023-09-01', amount: '₹1,450.00', status: 'Paid' },
+  { id: 'INV003', date: '2023-08-01', amount: '₹1,600.00', status: 'Paid' },
+  { id: 'INV004', date: '2023-07-01', amount: '₹1,300.00', status: 'Paid' },
+];
+
 export default function BillingPage() {
   const { toast } = useToast();
-  const [bills, setBills] = useState<BillingDraft[]>([]);
+  const [bills, setBills] = useState<ApiDraft[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResponseDialog, setShowResponseDialog] = useState(false);
-  const [selectedBill, setSelectedBill] = useState<BillingDraft | null>(null);
+  const [selectedBill, setSelectedBill] = useState<ApiDraft | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
 
-  useEffect(() => {
-    setBills(getUserApprovedBills());
-    setIsLoaded(true);
-
-    // Poll for new approved bills every 3 seconds for dynamic updates
-    const interval = setInterval(() => {
-      const latest = getUserApprovedBills();
-      setBills(prev => {
-        if (JSON.stringify(prev.map(b => b.id + b.status)) !== JSON.stringify(latest.map(b => b.id + b.status))) {
-          return latest;
-        }
-        return prev;
-      });
-    }, 3000);
-    return () => clearInterval(interval);
+  const loadDrafts = useCallback(async () => {
+    try {
+      const result = await fetchMyBillingDrafts();
+      setBills(result.drafts || []);
+    } catch {
+      setBills([]);
+    } finally {
+      setIsLoaded(true);
+    }
   }, []);
 
-  const handleRespond = (bill: BillingDraft) => {
+  useEffect(() => {
+    loadDrafts();
+    const interval = setInterval(loadDrafts, 15000);
+    return () => clearInterval(interval);
+  }, [loadDrafts]);
+
+  const handleRespond = (bill: ApiDraft) => {
     setSelectedBill(bill);
     setShowResponseDialog(true);
   };
 
-  const handleAccept = () => {
-    if (!selectedBill) return;
-    respondToBill(selectedBill.id, true);
-    addUserNotification(
-      `You've accepted the billing plan for ${selectedBill.serviceTitle}. Payment processing will begin.`,
-      'info'
-    );
-    setShowResponseDialog(false);
-    setSelectedBill(null);
-    setBills(getUserApprovedBills());
-    toast({
-      title: 'Plan Accepted!',
-      description: 'Your billing plan has been confirmed. Payment processing will begin.',
-    });
+  const handleAccept = async () => {
+    if (!selectedBill || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await acceptBillingDraft(selectedBill.draftId);
+      setShowResponseDialog(false);
+      setSelectedBill(null);
+      await loadDrafts();
+      toast({ title: 'Plan Accepted!', description: 'Your billing plan has been confirmed. Payment processing will begin.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message || 'Could not accept plan.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDispute = () => {
+  const handleDispute = async () => {
     if (!selectedBill || !disputeReason.trim()) {
       toast({ variant: 'destructive', title: 'Please describe your concern', description: 'Enter a reason before submitting.' });
       return;
     }
-    respondToBill(selectedBill.id, false, disputeReason);
-    // Create a support ticket
-    addTicket({
-      customerName: 'You',
-      customerEmail: '',
-      category: 'billing',
-      priority: 'medium',
-      subject: `Billing concern: ${selectedBill.serviceTitle}`,
-      description: disputeReason,
-      status: 'open',
-    });
-    addUserNotification(
-      `Your concern about the ${selectedBill.serviceTitle} billing plan has been sent to your provider. They'll respond shortly.`,
-      'info'
-    );
-    setShowResponseDialog(false);
-    setSelectedBill(null);
-    setDisputeReason('');
-    setBills(getUserApprovedBills());
-    toast({
-      title: 'Concern Raised',
-      description: 'A support ticket has been created. Your provider will review it.',
-    });
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await disputeBillingDraft(selectedBill.draftId, disputeReason);
+      setShowResponseDialog(false);
+      setSelectedBill(null);
+      setDisputeReason('');
+      await loadDrafts();
+      toast({ title: 'Concern Raised', description: 'A support ticket has been created. Your provider will review it.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message || 'Could not submit concern.' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isLoaded) {
@@ -472,8 +370,8 @@ export default function BillingPage() {
     );
   }
 
-  const pendingBill = bills.find(b => b.status === 'provider-approved');
-  const respondedBills = bills.filter(b => b.status === 'user-accepted' || b.status === 'user-disputed');
+  const pendingBill = bills.find(b => b.status === 'sent');
+  const respondedBills = bills.filter(b => b.status === 'accepted' || b.status === 'disputed');
 
   return (
     <div className="flex flex-col gap-6">
@@ -488,7 +386,7 @@ export default function BillingPage() {
         </p>
       </div>
 
-      {/* Waiting state — no approved bill yet */}
+      {/* Waiting state */}
       {bills.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
@@ -512,10 +410,10 @@ export default function BillingPage() {
 
       {/* Already responded bills */}
       {respondedBills.map(bill => (
-        <ApprovedBillCard key={bill.id} bill={bill} onRespond={() => { }} />
+        <ApprovedBillCard key={bill.draftId} bill={bill} onRespond={() => { }} />
       ))}
 
-      {/* Payment methods & Invoice History */}
+      {/* Payment methods & Plan Status */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -539,9 +437,7 @@ export default function BillingPage() {
           <CardHeader>
             <CardTitle>{bills.length > 0 ? 'Plan Status' : 'Current Plan'}</CardTitle>
             <CardDescription>
-              {bills.length > 0
-                ? 'Overview of your billing plan status.'
-                : 'You are on a standard energy plan.'}
+              {bills.length > 0 ? 'Overview of your billing plan status.' : 'You are on a standard energy plan.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -550,13 +446,11 @@ export default function BillingPage() {
               <ul className="list-disc list-inside text-muted-foreground text-sm">
                 <li>Real-time energy monitoring</li>
                 <li>AI-powered fault detection</li>
-                <li>Advanced analytics & ROI</li>
+                <li>Advanced analytics &amp; ROI</li>
                 <li>Priority chat support</li>
               </ul>
             </div>
-            {bills.length === 0 && (
-              <Button className="mt-4">Upgrade Plan</Button>
-            )}
+            {bills.length === 0 && <Button className="mt-4">Upgrade Plan</Button>}
           </CardContent>
         </Card>
       </div>
@@ -606,14 +500,18 @@ export default function BillingPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Respond to Billing Plan</DialogTitle>
-            <DialogDescription>
-              Choose how you&apos;d like to proceed with the {selectedBill?.generatedPlan.planName} plan.
-            </DialogDescription>
+            <p className="text-sm text-muted-foreground">
+              Choose how you&apos;d like to proceed with <strong>{selectedBill?.title}</strong>.
+            </p>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <Button className="w-full h-14 text-lg gap-2 bg-green-600 hover:bg-green-700" onClick={handleAccept}>
-              <ThumbsUp className="h-5 w-5" /> Accept & Proceed to Payment
+            <Button
+              className="w-full h-14 text-lg gap-2 bg-green-600 hover:bg-green-700"
+              onClick={handleAccept}
+              disabled={isSubmitting}
+            >
+              <ThumbsUp className="h-5 w-5" /> Accept &amp; Proceed to Payment
             </Button>
 
             <div className="relative">
@@ -631,9 +529,10 @@ export default function BillingPage() {
                 placeholder="e.g., I think the installation cost seems high for my area..."
                 value={disputeReason}
                 onChange={e => setDisputeReason(e.target.value)}
+                disabled={isSubmitting}
               />
-              <Button variant="outline" className="w-full gap-2" onClick={handleDispute}>
-                <MessageSquare className="h-4 w-4" /> Submit Concern & Raise Ticket
+              <Button variant="outline" className="w-full gap-2" onClick={handleDispute} disabled={isSubmitting}>
+                <MessageSquare className="h-4 w-4" /> Submit Concern &amp; Raise Ticket
               </Button>
             </div>
           </div>
