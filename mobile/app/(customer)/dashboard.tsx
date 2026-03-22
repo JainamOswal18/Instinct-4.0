@@ -208,6 +208,22 @@ export default function Dashboard() {
           </View>
         )}
 
+        {/* Feature promo cards */}
+        <View style={styles.promoRow}>
+          <LinearGradient colors={[colors.primaryDark, colors.surface]} style={styles.promoCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <Text style={styles.promoIcon}>⚡</Text>
+            <Text style={styles.promoTitle}>Smart Consumption</Text>
+            <Text style={styles.promoStat}>24/7</Text>
+            <Text style={styles.promoDesc}>Real-time monitoring & auto-optimisation around the clock</Text>
+          </LinearGradient>
+          <LinearGradient colors={[colors.primaryDark, colors.surface]} style={styles.promoCard} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }}>
+            <Text style={styles.promoIcon}>🛡️</Text>
+            <Text style={styles.promoTitle}>Future Proofing</Text>
+            <Text style={styles.promoStat}>100%</Text>
+            <Text style={styles.promoDesc}>Scalable energy infrastructure built to grow with your needs</Text>
+          </LinearGradient>
+        </View>
+
         {/* AI Advisor */}
         <TouchableOpacity
           style={styles.aiCard}
@@ -283,4 +299,11 @@ const styles = StyleSheet.create({
   aiTitle: { fontSize: typography.h4, fontWeight: '700', color: colors.primaryDark, marginBottom: 2 },
   aiSubtitle: { fontSize: typography.small, color: colors.primaryDark, opacity: 0.7 },
   aiArrow: { fontSize: 24, color: colors.primaryDark },
+
+  promoRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+  promoCard: { flex: 1, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  promoIcon: { fontSize: 24, marginBottom: spacing.xs },
+  promoTitle: { fontSize: typography.small, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
+  promoStat: { fontSize: 32, fontWeight: '700', color: colors.primary, marginBottom: spacing.xs },
+  promoDesc: { fontSize: typography.tiny, color: colors.textTertiary, lineHeight: 16 },
 });

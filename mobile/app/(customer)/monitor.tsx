@@ -1,12 +1,14 @@
 // app/(customer)/monitor.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, ActivityIndicator, Dimensions,
+  TextInput, KeyboardAvoidingView, Platform, FlatList, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { askGemini } from '../../services/gemini';
 
 import { useCurrentProperty } from '../../store/useAuthStore';
 import { useEnergyStore } from '../../store/useEnergyStore';
@@ -27,6 +29,51 @@ export default function MonitorScreen() {
   } = useEnergyStore();
 
   const propertyId = currentProperty?.id ?? '';
+
+  // ── Inline AI chat state ──────────────────────────────────────────────────
+  type ChatMsg = { id: string; role: 'user' | 'ai'; text: string };
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatHistoryRef = useRef<{ role: 'user' | 'model'; text: string }[]>([]);
+  const chatScrollRef = useRef<FlatList>(null);
+
+  const getEnergyContext = () => ({
+    solarKw: currentData?.solarKw,
+    batteryPercent: currentData?.batteryPercent,
+    gridKw: currentData?.gridKw,
+    consumption: currentData?.consumption,
+    lightingKw: currentData?.lightingKw,
+    coolingKw: currentData?.coolingKw,
+    currentKwh: stats?.currentKwh,
+    monthlyBill: stats?.monthlyBill,
+    carbonSavedKg: stats?.carbonSavedKg,
+    solarProduction: stats?.solarProduction,
+    trendPercent: stats?.trendPercent,
+    period,
+  });
+
+  const sendChatMessage = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    setChatInput('');
+
+    const userMsg: ChatMsg = { id: Date.now().toString(), role: 'user', text };
+    setChatMessages(prev => [...prev, userMsg]);
+    chatHistoryRef.current.push({ role: 'user', text });
+    setChatLoading(true);
+
+    try {
+      const response = await askGemini(text, getEnergyContext(), chatHistoryRef.current.slice(0, -1));
+      chatHistoryRef.current.push({ role: 'model', text: response });
+      if (chatHistoryRef.current.length > 20) chatHistoryRef.current = chatHistoryRef.current.slice(-20);
+      setChatMessages(prev => [...prev, { id: Math.random().toString(), role: 'ai', text: response }]);
+    } catch (err: any) {
+      Alert.alert('AI Advisor', err?.message ?? 'Failed to get response.');
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData(propertyId, period);
@@ -220,6 +267,85 @@ export default function MonitorScreen() {
           </>
         )}
         <View style={{ height: spacing.xxl }} />
+
+        {/* ── Inline AI Chat ─────────────────────────────────────────────── */}
+        <View style={styles.chatSection}>
+          <View style={styles.chatHeader}>
+            <View style={styles.chatHeaderLeft}>
+              <View style={styles.aiIconBadge}><Text style={styles.aiIconText}>AI</Text></View>
+              <View>
+                <Text style={styles.chatTitle}>Energy Advisor</Text>
+                <Text style={styles.chatSubtitle}>Powered by Gemini · Live data</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(customer)/ai-advisor')} style={styles.expandBtn}>
+              <Text style={styles.expandBtnText}>Full chat →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Messages */}
+          {chatMessages.length === 0 ? (
+            <View style={styles.chatEmpty}>
+              <Text style={styles.chatEmptyText}>Ask me anything about your energy data above ↑</Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={chatScrollRef}
+              data={chatMessages}
+              keyExtractor={m => m.id}
+              style={styles.chatList}
+              onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
+              renderItem={({ item }) => (
+                <View style={[styles.chatBubble, item.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAI]}>
+                  <Text style={[styles.chatBubbleText, item.role === 'user' ? styles.chatBubbleTextUser : styles.chatBubbleTextAI]}>
+                    {item.text}
+                  </Text>
+                </View>
+              )}
+            />
+          )}
+
+          {chatLoading && (
+            <View style={styles.typingRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.typingText}>Thinking...</Text>
+            </View>
+          )}
+
+          {/* Quick prompts */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickRow} contentContainerStyle={{ gap: spacing.sm }}>
+            {['How can I save on my bill?', 'Is my solar performing well?', 'Battery optimisation tips'].map(q => (
+              <TouchableOpacity key={q} style={styles.quickChip} onPress={() => { setChatInput(q); }}>
+                <Text style={styles.quickChipText}>{q}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Input */}
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.chatInputRow}>
+              <TextInput
+                style={styles.chatInput}
+                value={chatInput}
+                onChangeText={setChatInput}
+                placeholder="Ask about your energy..."
+                placeholderTextColor={colors.textTertiary}
+                returnKeyType="send"
+                onSubmitEditing={sendChatMessage}
+                multiline={false}
+              />
+              <TouchableOpacity
+                style={[styles.chatSendBtn, (!chatInput.trim() || chatLoading) && styles.chatSendBtnDisabled]}
+                onPress={sendChatMessage}
+                disabled={!chatInput.trim() || chatLoading}
+              >
+                <Text style={styles.chatSendBtnText}>→</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+
+        <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -262,4 +388,34 @@ const styles = StyleSheet.create({
   barTrack: { height: 80, justifyContent: 'flex-end' },
   bar: { width: 16, backgroundColor: colors.primary, borderRadius: 3 },
   barLabel: { fontSize: 9, color: colors.textTertiary, marginTop: 4 },
+
+  // ── Inline AI chat ────────────────────────────────────────────────────────
+  chatSection: { marginHorizontal: spacing.md, marginBottom: spacing.md, backgroundColor: colors.surface, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  chatHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.primaryLight },
+  chatHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  aiIconBadge: { width: 36, height: 36, borderRadius: borderRadius.sm, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  aiIconText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
+  chatTitle: { fontSize: typography.body, fontWeight: '700', color: colors.textPrimary },
+  chatSubtitle: { fontSize: typography.tiny, color: colors.textSecondary },
+  expandBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: colors.primary, borderRadius: borderRadius.sm },
+  expandBtnText: { fontSize: typography.tiny, fontWeight: '700', color: colors.primaryDark },
+  chatEmpty: { padding: spacing.lg, alignItems: 'center' },
+  chatEmptyText: { fontSize: typography.small, color: colors.textTertiary, textAlign: 'center' },
+  chatList: { maxHeight: 220, paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
+  chatBubble: { maxWidth: '85%', borderRadius: borderRadius.md, padding: spacing.sm, marginBottom: spacing.xs },
+  chatBubbleUser: { alignSelf: 'flex-end', backgroundColor: colors.primary },
+  chatBubbleAI: { alignSelf: 'flex-start', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  chatBubbleText: { fontSize: typography.small, lineHeight: 18 },
+  chatBubbleTextUser: { color: colors.primaryDark },
+  chatBubbleTextAI: { color: colors.textPrimary },
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  typingText: { fontSize: typography.tiny, color: colors.textSecondary },
+  quickRow: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  quickChip: { backgroundColor: colors.primaryLight, paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.primary },
+  quickChipText: { fontSize: typography.tiny, color: colors.primary, fontWeight: '600' },
+  chatInputRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.sm },
+  chatInput: { flex: 1, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, fontSize: typography.small, color: colors.textPrimary, maxHeight: 80 },
+  chatSendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  chatSendBtnDisabled: { opacity: 0.4 },
+  chatSendBtnText: { fontSize: 18, color: colors.primaryDark, fontWeight: '700' },
 });

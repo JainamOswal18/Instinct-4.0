@@ -18,6 +18,7 @@ import servicesRoutes from '../src/routes/services.routes';
 import insightsRoutes from '../src/routes/insights.routes';
 import providerDashboardRoutes from '../src/routes/provider.dashboard.routes';
 import providerInstallationsRoutes from '../src/routes/provider.installations.routes';
+import providerRequestsRoutes from '../src/routes/provider.requests.routes';
 import providerCustomersRoutes from '../src/routes/provider.customers.routes';
 import providerRevenueRoutes from '../src/routes/provider.revenue.routes';
 import providerTicketsRoutes from '../src/routes/provider.tickets.routes';
@@ -89,6 +90,7 @@ app.use(
   ['/provider', '/api/provider'],
   providerDashboardRoutes,
   providerInstallationsRoutes,
+  providerRequestsRoutes,
   providerCustomersRoutes,
   providerRevenueRoutes,
   providerTicketsRoutes,

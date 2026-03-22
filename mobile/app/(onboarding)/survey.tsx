@@ -11,12 +11,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore, useCurrentProperty, SurveyData } from '../../store/useAuthStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
+import apiWrapper from '../../services/apiWrapper';
 import { colors, spacing, typography, borderRadius } from '../../theme/colors';
 
 type PropertyType = 'residential' | 'commercial';
@@ -28,6 +30,14 @@ const ENERGY_SERVICES: { id: EnergyService; icon: string; label: string; descrip
   { id: 'lighting',icon: '💡', label: 'Smart Lighting',    description: 'Efficient lighting solutions for every space' },
   { id: 'cooling', icon: '❄️', label: 'Cooling Solutions', description: 'Energy-efficient climate control systems' },
 ];
+
+// Savings copy shown per service selection
+const SERVICE_SAVINGS: Record<EnergyService, { saving: string; stat: string; detail: string }> = {
+  solar:    { saving: 'Save up to 70%',  stat: '₹3,500/mo avg',  detail: 'on your electricity bill by generating your own solar power' },
+  battery:  { saving: 'Save up to 25%',  stat: '5 hrs backup',   detail: 'by storing excess energy and avoiding peak-hour grid rates' },
+  lighting: { saving: 'Save up to 30%',  stat: '40% less power', detail: 'with smart LED systems that auto-adjust to occupancy & daylight' },
+  cooling:  { saving: 'Save up to 35%',  stat: '₹1,200/mo avg',  detail: 'with AI-optimised cooling that runs during off-peak solar hours' },
+};
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
@@ -73,7 +83,7 @@ function validateOccupants(val: string): string | undefined {
 export default function SurveyScreen() {
   const router = useRouter();
   const currentProperty = useCurrentProperty();
-  const { saveSurveyData } = useAuthStore();
+  const { saveSurveyData, switchProperty } = useAuthStore();
   const { addNotification } = useNotificationStore();
 
   const [selectedServices, setSelectedServices] = useState<EnergyService[]>([]);
@@ -175,7 +185,59 @@ export default function SurveyScreen() {
       submittedAt: new Date().toISOString(),
     };
 
-    saveSurveyData(currentProperty.id, surveyData);
+    // Resolve a real backend property ID.
+    // If the local property is still the placeholder 'default_property', we need
+    // to create (or fetch) a real one before the survey can be saved on the backend.
+    let realPropertyId = currentProperty.id;
+
+    if (realPropertyId === 'default_property' || !realPropertyId.match(/^[0-9a-f-]{36}$/i)) {
+      try {
+        // First try fetching existing backend properties
+        const propsRes = await apiWrapper.user.getProperties();
+        if (propsRes?.success && (propsRes.data as any)?.properties?.length) {
+          realPropertyId = (propsRes.data as any).properties[0].id;
+        } else {
+          // Create a new property on the backend
+          const addRes = await apiWrapper.user.addProperty(
+            currentProperty.name || 'My Property',
+            address || currentProperty.address || 'Address not provided',
+            currentProperty.type || 'residential',
+          );
+          if (addRes?.success && addRes.data) {
+            realPropertyId = (addRes.data as any).propertyId ?? (addRes.data as any).id;
+          }
+        }
+        // Migrate local store to use the real ID
+        if (realPropertyId !== currentProperty.id) {
+          switchProperty(realPropertyId);
+          if (__DEV__) console.log('[Survey] Migrated property ID:', currentProperty.id, '→', realPropertyId);
+        }
+      } catch (e: any) {
+        console.warn('[Survey] Could not resolve real property ID:', e?.message);
+      }
+    }
+
+    try {
+      // Submit to backend — this sets subscription_status = SURVEY_SUBMITTED in DB
+      // and creates a survey row the provider can see
+      const response = await apiWrapper.survey.submit(realPropertyId, {
+        propertyType: surveyData.propertyType,
+        monthlyBill: surveyData.monthlyBill,
+        monthlyConsumption: surveyData.monthlyConsumption,
+        peakHours: surveyData.peakHours,
+        occupants: surveyData.occupants,
+        appliances: surveyData.appliances,
+      });
+
+      if (__DEV__) {
+        console.log('[Survey] Backend response:', JSON.stringify(response));
+      }
+    } catch (err: any) {
+      console.warn('[Survey] Backend submit failed (continuing with local save):', err?.message);
+    }
+
+    // Always save locally so the app can navigate correctly
+    saveSurveyData(realPropertyId, surveyData);
 
     addNotification({
       type: 'success',
@@ -234,6 +296,35 @@ export default function SurveyScreen() {
             </View>
             {fieldErrors.energyServices && (
               <Text style={styles.errorText}>⚠ {fieldErrors.energyServices}</Text>
+            )}
+            {/* Dynamic savings preview */}
+            {selectedServices.length > 0 && (
+              <View style={styles.savingsCard}>
+                <LinearGradient
+                  colors={[colors.primaryDark, colors.surface]}
+                  style={styles.savingsGradient}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                >
+                  <Text style={styles.savingsHeading}>Your estimated savings</Text>
+                  {selectedServices.map(svc => {
+                    const s = SERVICE_SAVINGS[svc];
+                    return (
+                      <View key={svc} style={styles.savingsRow}>
+                        <View style={styles.savingsBadge}>
+                          <Text style={styles.savingsBadgeText}>{s.saving}</Text>
+                        </View>
+                        <View style={styles.savingsInfo}>
+                          <Text style={styles.savingsStat}>{s.stat}</Text>
+                          <Text style={styles.savingsDetail}>{s.detail}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  <Text style={styles.savingsFooter}>
+                    A custom proposal with exact numbers will be generated after your site visit.
+                  </Text>
+                </LinearGradient>
+              </View>
             )}
             <View style={styles.helperCard}>
               <Text style={styles.helperText}>
@@ -553,6 +644,17 @@ const styles = StyleSheet.create({
 
   helperCard: { backgroundColor: colors.primaryLight, padding: spacing.sm, borderRadius: borderRadius.sm, marginTop: spacing.sm },
   helperText: { fontSize: typography.small, color: colors.primary, lineHeight: 18 },
+
+  savingsCard: { borderRadius: borderRadius.lg, overflow: 'hidden', marginBottom: spacing.md },
+  savingsGradient: { padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg },
+  savingsHeading: { fontSize: typography.small, fontWeight: '700', color: colors.primary, marginBottom: spacing.sm },
+  savingsRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm, gap: spacing.sm },
+  savingsBadge: { backgroundColor: colors.primary, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: borderRadius.sm, minWidth: 90, alignItems: 'center' },
+  savingsBadgeText: { fontSize: typography.tiny, fontWeight: '700', color: colors.primaryDark },
+  savingsInfo: { flex: 1 },
+  savingsStat: { fontSize: typography.small, fontWeight: '700', color: colors.textPrimary },
+  savingsDetail: { fontSize: typography.tiny, color: colors.textSecondary, lineHeight: 16 },
+  savingsFooter: { fontSize: typography.tiny, color: colors.textTertiary, marginTop: spacing.xs, lineHeight: 16 },
 
   subSectionTitle: { fontSize: typography.body, fontWeight: '700', color: colors.textPrimary, marginTop: spacing.lg, marginBottom: spacing.xs },
   subSectionDescription: { fontSize: typography.small, color: colors.textSecondary, marginBottom: spacing.md },

@@ -51,9 +51,9 @@ export const apiWrapper = {
       ),
 
     // Mock returns `token` — useAuthStore reads `accessToken ?? token` so both work
-    register: (name: string, email: string, password: string, phone?: string) =>
+    register: (name: string, email: string, password: string, phone?: string, role = 'CITIZEN') =>
       handleApiCall(
-        () => api.auth.register(name, email, password, phone),
+        () => api.auth.register(name, email, password, phone, role),
         async () => {
           await new Promise(r => setTimeout(r, 800));
           return {
