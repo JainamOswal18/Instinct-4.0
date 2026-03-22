@@ -437,7 +437,7 @@ function UserDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-4xl font-extrabold text-green-600 mb-2">~40%</p>
+              <p className="text-4xl font-extrabold text-green-600 mb-2">~30%</p>
               <p className="text-sm text-foreground/80">
                 Average monthly bill drop after installing our solar array plus smart battery.
               </p>
@@ -480,9 +480,6 @@ function UserDashboard() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Detailed Benefits Breakdown */}
-        <AutoProgressBenefits />
       </div>
 
     </div>

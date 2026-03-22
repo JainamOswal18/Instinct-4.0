@@ -356,22 +356,7 @@ export default function RequestServicePage() {
               />
               <p className="text-xs text-muted-foreground">Find this on your most recent utility bill.</p>
               
-              {/* Dynamic Algorithm Output */}
-              {getEstimatedImpact(service.title, consumption) && (
-                <div className="mt-3 p-4 bg-primary/10 rounded-lg border border-primary/20 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-primary">
-                      {getEstimatedImpact(service.title, consumption)?.label}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {getEstimatedImpact(service.title, consumption)?.sub}
-                    </p>
-                  </div>
-                  <div className="text-xl font-bold font-headline text-primary text-right tabular-nums">
-                    <AnimatedNumber value={getEstimatedImpact(service.title, consumption)?.value || ''} />
-                  </div>
-                </div>
-              )}
+
             </div>
 
             <div className="space-y-2">
