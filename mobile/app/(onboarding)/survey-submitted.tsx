@@ -1,5 +1,5 @@
 // app/(onboarding)/survey-submitted.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,11 +49,34 @@ const TIMELINE = [
 export default function SurveySubmittedScreen() {
   const router = useRouter();
   const currentProperty = useCurrentProperty();
-  const { saveProposal } = useAuthStore();
+  const { saveProposal, syncProperties } = useAuthStore();
   const { addNotification } = useNotificationStore();
   const [simulating, setSimulating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleGoHome = () => {
+  // ── Auto-navigate when provider marks completed → status becomes PLAN_PROPOSED ──
+  useEffect(() => {
+    if (currentProperty?.subscriptionStatus === 'PLAN_PROPOSED') {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      router.replace('/(onboarding)/proposal');
+    }
+  }, [currentProperty?.subscriptionStatus]);
+
+  // ── Poll every 10s while on this screen ──────────────────────────────────
+  useEffect(() => {
+    intervalRef.current = setInterval(async () => {
+      try { await syncProperties(); } catch { /* non-critical */ }
+    }, 10_000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [syncProperties]);
+
+  const handleGoHome = async () => {
+    setSyncing(true);
+    try {
+      await syncProperties();
+    } catch { /* non-critical */ }
+    setSyncing(false);
     router.replace('/');
   };
 
@@ -235,6 +259,7 @@ export default function SurveySubmittedScreen() {
         <TouchableOpacity
           style={styles.homeButton}
           onPress={handleGoHome}
+          disabled={syncing}
           activeOpacity={0.85}
         >
           <LinearGradient
@@ -243,7 +268,10 @@ export default function SurveySubmittedScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <Text style={styles.homeButtonText}>← Back to Home</Text>
+            {syncing
+              ? <ActivityIndicator color={colors.primaryDark} />
+              : <Text style={styles.homeButtonText}>← Back to Home</Text>
+            }
           </LinearGradient>
         </TouchableOpacity>
 

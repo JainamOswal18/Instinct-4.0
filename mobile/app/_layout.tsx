@@ -1,16 +1,17 @@
 // app/_layout.tsx
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/useAuthStore';
-import { colors } from '../theme/colors';
 
 export default function RootLayout() {
   const { loadUser } = useAuthStore();
 
   useEffect(() => {
-    // Restore session on app start — no token clearing
-    // Sessions persist until the user explicitly logs out
-    loadUser();
+    // Always clear session on app start — user must log in each time
+    AsyncStorage.removeItem('accessToken').then(() => {
+      loadUser();
+    });
   }, []);
 
   return (

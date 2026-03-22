@@ -1,6 +1,12 @@
 // app/(onboarding)/_layout.tsx
 import { Stack } from 'expo-router';
 import { colors } from '../../theme/colors';
+import { useStatusSync } from '../../hooks/useStatusSync';
+
+function StatusSyncProvider() {
+  useStatusSync();
+  return null;
+}
 
 export default function OnboardingLayout() {
   return (
@@ -11,6 +17,7 @@ export default function OnboardingLayout() {
         animation: 'slide_from_right',
       }}
     >
+      <StatusSyncProvider />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="survey" />
       <Stack.Screen 

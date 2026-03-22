@@ -1,29 +1,80 @@
 // app/(onboarding)/proposal.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCurrentProperty, useAuthStore } from '../../store/useAuthStore';
+import { useCurrentProperty, useAuthStore, ProposedPlan } from '../../store/useAuthStore';
 import { useNotificationStore } from '../../store/useNotificationStore';
 import { colors, spacing, typography, borderRadius } from '../../theme/colors';
+import api from '../../services/api';
 
 export default function ProposalPage() {
   const router = useRouter();
   const currentProperty = useCurrentProperty();
-  const { updateSubscriptionStatus, saveProposal } = useAuthStore();
+  const { updateSubscriptionStatus, saveProposal, isLoading: storeLoading } = useAuthStore();
   const { addNotification } = useNotificationStore();
   const [selectedDuration, setSelectedDuration] = useState<12 | 24 | 36>(24);
+  const [loading, setLoading] = useState(false);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
   const proposal = currentProperty?.proposedPlan;
 
+  // Wait for store to finish loading before doing anything
   useEffect(() => {
-    // If no proposal, redirect back
-    if (!proposal || !currentProperty) {
-      Alert.alert('No Plan Found', 'Please complete the survey first.');
-      router.replace('/(customer)/dashboard');
+    if (storeLoading) return;
+
+    if (!currentProperty) {
+      // Store is ready but no user — go to login
+      router.replace('/');
+      return;
     }
-  }, [proposal, currentProperty]);
+
+    if (!proposal && !fetchAttempted) {
+      setFetchAttempted(true);
+      setLoading(true);
+      api.subscription.getProposalByProperty(currentProperty.id)
+        .then((res: any) => {
+          if (res?.success && res.data) {
+            const d = res.data;
+            const fetched: ProposedPlan = {
+              id: d.proposalId ?? currentProperty.id,
+              solarCapacity: d.solarCapacity,
+              batteryStorage: d.batteryStorage,
+              monthlyFee: d.monthlyFee,
+              estimatedSavings: d.estimatedSavings,
+              estimatedProduction: d.estimatedProduction,
+              contractDuration: d.contractDuration,
+              installationFee: d.installationFee,
+              securityDeposit: d.securityDeposit,
+              whatsIncluded: d.whatsIncluded,
+              generatedAt: d.generatedAt,
+            };
+            saveProposal(currentProperty.id, fetched);
+          } else {
+            // No proposal on server yet — downgrade status so we don't loop
+            updateSubscriptionStatus(currentProperty.id, 'SURVEY_SUBMITTED');
+            router.replace('/');
+          }
+        })
+        .catch(() => {
+          // Network error — go back to survey-submitted to wait
+          updateSubscriptionStatus(currentProperty.id, 'SURVEY_SUBMITTED');
+          router.replace('/');
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [storeLoading, currentProperty?.id, proposal, fetchAttempted]);
+
+  // Still waiting for store or fetch in progress
+  if (storeLoading || loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 12, color: colors.textSecondary }}>Loading your plan…</Text>
+      </View>
+    );
+  }
 
   if (!proposal || !currentProperty) return null;
 

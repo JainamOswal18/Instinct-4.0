@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { assertNoDbError, getEaasClient } from '../lib/eaas-db';
 import { authenticate } from '../middleware/auth.middleware';
@@ -169,14 +170,15 @@ router.patch(
     }
 
     const installationId = String(req.params.installationId);
+    const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
       status: parsed.data.status,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     };
     if (parsed.data.notes !== undefined) payload.notes = parsed.data.notes;
     if (parsed.data.assignedTechnician !== undefined) payload.assigned_technician = parsed.data.assignedTechnician;
-    if (parsed.data.status === 'INSTALLATION') payload.actual_start_date = new Date().toISOString();
-    if (parsed.data.status === 'LIVE') payload.completed_date = new Date().toISOString();
+    if (parsed.data.status === 'INSTALLATION') payload.actual_start_date = now;
+    if (parsed.data.status === 'LIVE') payload.completed_date = now;
 
     const db = getEaasClient();
     const { data: updated, error } = await db.from('installations').update(payload).eq('id', installationId).select('*').maybeSingle();
@@ -185,6 +187,75 @@ router.patch(
     if (!updated) {
       sendError(res, 404, 'NOT_FOUND', 'Resource not found');
       return;
+    }
+
+    // Map installation stage → installation_progress flags + property status
+    if (updated.property_id) {
+      // Note: installation_progress uses camelCase columns in Supabase (mapped from Prisma)
+      // but Supabase JS client expects snake_case. Check actual column names from schema.
+      const progressUpdate: Record<string, unknown> = {};
+      let propertyStatus: string | null = null;
+
+      switch (parsed.data.status) {
+        case 'SURVEY':
+          // Survey stage — no installation_progress flags to set yet
+          break;
+        case 'APPROVAL':
+          progressUpdate.engineer_assigned = true;
+          progressUpdate.engineer_assigned_at = now;
+          if (parsed.data.assignedTechnician) {
+            progressUpdate.engineer_name = parsed.data.assignedTechnician;
+          }
+          break;
+        case 'PROCUREMENT':
+          progressUpdate.site_survey_scheduled = true;
+          progressUpdate.site_survey_date = now;
+          break;
+        case 'INSTALLATION':
+          progressUpdate.installation_started = true;
+          progressUpdate.installation_date = now;
+          break;
+        case 'TESTING':
+          // Testing stage — installation started, awaiting final activation
+          break;
+        case 'LIVE':
+          progressUpdate.system_activated = true;
+          progressUpdate.activation_date = now;
+          propertyStatus = 'ACTIVE';
+          break;
+      }
+
+      if (Object.keys(progressUpdate).length > 0) {
+        // Upsert installation_progress
+        const { data: existingProgress } = await db
+          .from('installation_progress')
+          .select('id')
+          .eq('property_id', updated.property_id)
+          .maybeSingle();
+
+        if (existingProgress) {
+          const { error: progressUpdateError } = await db
+            .from('installation_progress')
+            .update(progressUpdate)
+            .eq('property_id', updated.property_id);
+          if (progressUpdateError) {
+            console.error('[provider/installations] progress update failed:', progressUpdateError.message);
+          }
+        } else {
+          const { error: progressInsertError } = await db
+            .from('installation_progress')
+            .insert({ id: randomUUID(), property_id: updated.property_id, ...progressUpdate });
+          if (progressInsertError) {
+            console.error('[provider/installations] progress insert failed:', progressInsertError.message);
+          }
+        }
+      }
+
+      // Update property subscription status when LIVE
+      if (propertyStatus) {
+        await db.from('properties').update({ subscription_status: propertyStatus }).eq('id', updated.property_id);
+        console.log('[provider/installations] property', updated.property_id, '→', propertyStatus);
+      }
     }
 
     sendSuccess(res, {

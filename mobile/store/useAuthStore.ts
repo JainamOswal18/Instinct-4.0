@@ -546,6 +546,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             console.warn('[syncProperties] Could not fetch proposal for', prop.id, e);
           }
         }
+
+        // When status becomes ACTIVE, fetch final installation progress so
+        // the progress screen shows fully complete before routing to dashboard
+        if (prop.subscriptionStatus === 'ACTIVE') {
+          try {
+            const progressRes = await api.installation.getProgress(prop.id);
+            if (progressRes?.success && progressRes.data) {
+              const r = progressRes.data.progress ?? progressRes.data;
+              const finalProgress: InstallationProgress = {
+                paymentConfirmed:    r.paymentConfirmed    ?? true,
+                engineerAssigned:    r.engineerAssigned    ?? true,
+                engineerName:        r.engineerName,
+                engineerPhone:       r.engineerPhone,
+                siteSurveyScheduled: r.siteSurveyScheduled ?? true,
+                siteSurveyDate:      r.siteSurveyDate,
+                installationStarted: r.installationStarted ?? true,
+                installationDate:    r.installationDate,
+                systemActivated:     true,
+                activationDate:      r.activationDate,
+                estimatedCompletion: r.estimatedCompletion,
+              };
+              const currentUser = get().user ?? updatedUser;
+              const withProgress = {
+                ...currentUser,
+                properties: currentUser.properties.map(p =>
+                  p.id === prop.id ? { ...p, installationProgress: finalProgress } : p
+                ),
+              };
+              await saveUserData(withProgress);
+              set({ user: withProgress });
+              console.log('[syncProperties] installation progress synced for ACTIVE property', prop.id);
+            }
+          } catch (e) {
+            console.warn('[syncProperties] Could not fetch installation progress for', prop.id, e);
+          }
+        }
       }
     } catch (e) {
       console.warn('[syncProperties] Failed:', e);
@@ -558,13 +594,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!user) return;
 
     try {
-      const response = await apiWrapper.installation.getProgress(propertyId);
+      const response = await api.installation.getProgress(propertyId);
       if (!response?.success) return;
 
       const raw = response.data?.progress ?? response.data;
       if (!raw) return;
 
       const r = raw as any;
+      console.log('[syncInstallationProgress] raw data:', JSON.stringify(r));
+
       const progress: Partial<InstallationProgress> = {
         paymentConfirmed:    r.paymentConfirmed    ?? r.payment_confirmed    ?? undefined,
         engineerAssigned:    r.engineerAssigned    ?? r.engineer_assigned    ?? undefined,
@@ -595,6 +633,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: updatedUser });
 
       if (clean.systemActivated) {
+        console.log('[syncInstallationProgress] system activated — setting ACTIVE');
         const withActive: User = {
           ...updatedUser,
           properties: updatedUser.properties.map((p) =>

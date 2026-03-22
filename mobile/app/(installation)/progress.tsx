@@ -1,8 +1,8 @@
 // app/(installation)/progress.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Linking, Alert, RefreshControl,
+  Linking, Alert, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -40,6 +40,16 @@ export default function InstallationProgressScreen() {
   const { updateSubscriptionStatus, updateInstallationProgress } = useAuthStore();
   const { addNotification } = useNotificationStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  // Sync on mount so we always have fresh data from backend
+  useEffect(() => {
+    if (!currentProperty?.id) { setInitialLoading(false); return; }
+    const { syncInstallationProgress, syncProperties } = useAuthStore.getState();
+    Promise.all([syncProperties(), syncInstallationProgress(currentProperty.id)])
+      .catch(() => {})
+      .finally(() => setInitialLoading(false));
+  }, [currentProperty?.id]);
 
   const ip = currentProperty?.installationProgress;
   const isComplete = ip?.systemActivated ?? false;
@@ -88,17 +98,33 @@ export default function InstallationProgressScreen() {
   };
 
   const onRefresh = async () => {
+    if (!currentProperty) return;
     setRefreshing(true);
-    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const { syncInstallationProgress, syncProperties } = useAuthStore.getState();
+      await Promise.all([
+        syncProperties(),
+        syncInstallationProgress(currentProperty.id),
+      ]);
+    } catch { /* non-critical */ }
     setRefreshing(false);
   };
 
   if (!ip || !currentProperty) {
+    if (initialLoading) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <View style={styles.errorContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.errorText, { marginTop: spacing.md }]}>Loading installation progress...</Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>No installation data found</Text>
-          {/* Only show back if activated */}
           {isComplete && (
             <TouchableOpacity style={styles.ctaButton} onPress={() => router.replace('/')}>
               <Text style={styles.ctaButtonText}>Go to Dashboard</Text>

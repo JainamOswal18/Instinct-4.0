@@ -135,6 +135,50 @@ router.post(
       assertNoDbError(installationCreateError);
     }
 
+    // Create an installations row so the provider web app can see this in the pipeline
+    const { data: existingInstallation } = await db
+      .from('installations')
+      .select('id')
+      .eq('property_id', updated.property_id)
+      .maybeSingle();
+
+    if (!existingInstallation) {
+      // Fetch property + user info to populate the installations row
+      const { data: property } = await db
+        .from('properties')
+        .select('user_id, name')
+        .eq('id', updated.property_id)
+        .maybeSingle();
+
+      const { data: user } = property?.user_id
+        ? await db.from('users').select('name').eq('id', property.user_id).maybeSingle()
+        : { data: null };
+
+      // Find the service request to get service title
+      const { data: serviceRequest } = await db
+        .from('service_requests')
+        .select('service_title, consumption_kwh')
+        .eq('property_id', updated.property_id)
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const now = new Date().toISOString();
+      await db.from('installations').insert({
+        id: randomUUID(),
+        property_id: updated.property_id,
+        service_title: serviceRequest?.service_title ?? 'Energy Service',
+        customer_name: user?.name ?? 'Customer',
+        machine_name: serviceRequest?.service_title ?? 'Solar System',
+        machine_cost: updated.amount ?? 0,
+        estimated_setup_days: 30,
+        status: 'APPROVAL',
+        created_at: now,
+        updated_at: now,
+      });
+      console.log('[payment/verify] installations row created for property', updated.property_id);
+    }
+
     sendSuccess(res, {
       paymentId: updated.id,
       transactionId: updated.transaction_id,
