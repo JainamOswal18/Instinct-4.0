@@ -62,10 +62,8 @@ const client = apiClient as any;
 export const api = {
   // ── AUTH ─────────────────────────────────────────────────────────────────
   auth: {
-<<<<<<< HEAD
     register: (name: string, email: string, password: string, phone?: string, role = 'CITIZEN') =>
       client.post('/auth/register', { name, email, password, phone, role }),
->>>>>>> 3fa6730a0162132a414732f36efabea9d6ad1962
 
     login: (email: string, password: string) =>
       client.post('/auth/login', { email, password }),
@@ -103,8 +101,6 @@ export const api = {
   // ── SUBSCRIPTION ─────────────────────────────────────────────────────────
   // Spec: POST /subscription/generate-proposal — { propertyId, surveyId }
   // Spec: GET  /subscription/proposal/:proposalId
-<<<<<<< HEAD
-  // Spec: GET  /subscription/proposal/by-property/:propertyId
   // Spec: GET  /subscription/proposal/by-property/:propertyId
   subscription: {
     generateProposal: (propertyId: string, surveyId: string) =>
